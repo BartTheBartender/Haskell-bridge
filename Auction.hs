@@ -10,42 +10,52 @@ import Data.List (find)
 import Debug.Trace
 
 
-data Auction = Auction {calls :: [(Direction,Call)], turn :: Direction} deriving (Show, Eq)
+data Auction = Auction {calls :: [(Direction,Call)], turn :: Direction} deriving Eq
 
-auction0 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, (Bid One NoTrump)), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
+instance Show Auction where
+  show (Auction calls turn) = header ++ showCalls calls ++ showTurn turn
+    where
+    line = "\n---------------------------------\n"
+    header =  "|" ++ align (show West) ++ "|" ++ align (show North) ++ "|" ++ align (show East) ++ "|" ++ align (show South)
 
-auction1 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, Pass), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
+    showTurn South = "|" ++ align "#" ++ "|"
+    showTurn East  = "|" ++ align "#" ++ "|" ++ align "" ++ "|"
+    showTurn North = "|" ++ align "#" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|"
+    showTurn West  = "|" ++ line ++ "|" ++ align "#" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|"
+
+    showCalls [] = ""
+    showCalls ((West, call):xs) = showCalls xs ++ "|" ++ line ++ "|" ++ align(show call)
+    showCalls ((_, call):xs) = showCalls xs ++ "|" ++ align(show call)
+
+    align s | length s <= 5 = " " ++ s ++ take (6 - length s) [' ',' '..]
+
+-- auction0 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, (Bid One NoTrump)), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
+--
+-- auction1 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, Pass), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
+
+auction0 = Auction [(South, Pass),(East, Pass),(North, Pass),(West, Pen Redouble),(South, Pen Double),(East, Bid Three (Trump Spade)), (North, Bid Three (Trump Club)), (West, Bid Two (Trump Spade)), (South, Pass), (East, Pen Double), (North, Bid One (Trump Heart)), (West, Pass)] West
 
 mkAuction :: Direction -> Auction
 mkAuction turn = Auction [] turn
 
--- private function. Assumes the auction is constructed correctly.
 result :: Auction -> Maybe Contract
-
-result (Auction [(_, Pass), (_, Pass), (_, Pass), (_, Pass)] _) = Just FourPasses
-
-result (Auction ((_, Pass):(_, Pass):(_, Pass):calls) _) =
-  let
-    (_, call):_ = calls -- by properties of the auction
-    penalty = case call of Pen pen -> Just pen; otherwise -> Nothing
-    toLastBid =
-      dropWhile(\(_, call) -> case call of (Bid _ _) -> False; _ -> True) calls
-
-    (direction, (Bid level strain)):_ = toLastBid
-    direction' =  fst $ firstDeclarer direction strain toLastBid
-  in Just $ Contract level strain penalty direction'
-
+result (Auction ((_, Pass):(_, Pass):(_, Pass):calls) _) = Just $ resultHelper calls
 result _ = Nothing
 
-firstDeclarer direction' strain' calls' = last $ 
-  filter(\(direction, call) -> (isPartner direction' direction)
-  && case call of
-    Bid _ strain -> strain == strain'
-    _ -> False
-  ) calls'
+resultHelper [(_, Pass)] = FourPasses
+resultHelper ((_, Pass):_) = error "The auction was constructed incorrectily!"
+resultHelper calls = 
+  let (_, lastCall):_ = calls
+      penalty = case lastCall of Pen pen -> Just pen; _ -> Nothing
+      toLastBid = 
+        dropWhile (\(_, call) -> case call of (Bid _ _) -> False; _ -> True) calls
+      (lastDirection, (Bid level strain)):_ = toLastBid
+      direction = fst $ last $ 
+        filter(\(_, call) -> case call of Bid _ strain -> True; _ -> False)
+        (filter((isPartner lastDirection).fst) toLastBid)
 
+  in Contract level strain penalty direction
 
--- thisfunction assumes that the auction was constructed correctly
 availableCalls :: Auction -> [Call]
 availableCalls (Auction calls turn) =
   case noPasses of
@@ -71,7 +81,24 @@ availableCalls (Auction calls turn) =
     [ Bid level strain' | strain' <- [strain..maxBound], strain' /= strain] ++ 
     [Bid level' strain' | strain' <-[minBound..maxBound], level' <- [minBound..maxBound], level' > level]
   findLastBid calls' = dropWhile (\(_, call) -> case call of Pass -> True; _ -> False) calls'
---SANDBOX---------------
 
 higherBids level strain = [(level, strain') | strain' <- [strain..maxBound], strain' /= strain] ++ [(level', strain') | strain' <-[minBound..maxBound], level' <- [minBound..maxBound], level' > level]
--- runAuction :: StateT Auction (ReaderT Convention (IO Call)) Play
+
+type Convention = Board -> Auction -> Call
+badConvention = \_ _ -> Pass
+
+runAuction :: ReaderT Convention (ReaderT Board (StateT Auction IO)) Contract
+runAuction = do
+  -- convention <- ask
+  -- board <- lift ask
+  auction <- lift $ lift get
+  case result auction of
+    Just contract -> do
+      liftIO $ putStrLn "Auction finished"
+      return contract
+    Nothing -> do
+      board <- lift ask
+      liftIO $ print "a"
+      case turn auction of
+        South -> undefined
+        _ -> undefined

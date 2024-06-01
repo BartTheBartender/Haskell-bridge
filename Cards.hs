@@ -40,7 +40,12 @@ instance Ord Card where
 instance Show Card where
   show (Card figure suit) = show figure ++ show suit
 
-data Board = Board (Array Direction [Card])
+data Hand =  Hand [Card]
+
+instance Show Hand where
+  show _ = " "
+
+data Board = Board (Array Direction Hand)
 
 instance Show Board where
   show (Board arr) = 
@@ -58,8 +63,8 @@ mkBoard :: (RandomGen g) => Rand g Board
 mkBoard = do
   shuffled <- shuffleM deck
   let helper = zip [0,1..] shuffled
-  let south = sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 0) helper
-  let west  = sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 1) helper
-  let north = sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 2) helper
-  let east  = sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 3) helper
+  let south = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 0) helper
+  let west  = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 1) helper
+  let north = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 2) helper
+  let east  = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 3) helper
   return (Board $ array(minBound, maxBound) [(South, south), (West, west), (North, north), (East, east)])
