@@ -3,6 +3,21 @@ import Cards (Suit(..))
 
 data Strain = Trump Suit | NoTrump deriving (Eq, Ord)
 
+instance Enum Strain where
+  toEnum :: Int -> Strain
+  toEnum n
+    | n >= 0 && n <= 3 = Trump (toEnum n)
+    | n == 4 = NoTrump
+    | otherwise = error "Invalid enum value for Strain"
+
+  fromEnum :: Strain -> Int
+  fromEnum (Trump suit) = fromEnum suit
+  fromEnum NoTrump = 4
+
+instance Bounded Strain where
+  minBound = Trump Club
+  maxBound = NoTrump
+
 instance Show Strain where
   show NoTrump = "NT"
   show (Trump Club) = "C"
