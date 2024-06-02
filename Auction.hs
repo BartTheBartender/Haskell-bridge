@@ -13,7 +13,7 @@ import Debug.Trace
 data Auction = Auction {calls :: [(Direction,Call)], turn :: Direction} deriving Eq
 
 instance Show Auction where
-  show (Auction calls turn) = header ++ showCalls calls ++ showTurn turn
+  show (Auction calls turn) = line ++ header ++ showCalls calls ++ showTurn turn ++ line
     where
     line = "\n---------------------------------\n"
     header =  "|" ++ align (show West) ++ "|" ++ align (show North) ++ "|" ++ align (show East) ++ "|" ++ align (show South)
@@ -98,7 +98,9 @@ runAuction = do
       return contract
     Nothing -> do
       board <- lift ask
-      liftIO $ print "a"
+      liftIO $ print auction
       case turn auction of
-        South -> undefined
+        South -> do
+          liftIO $ print $ availableCalls auction
+          undefined
         _ -> undefined
