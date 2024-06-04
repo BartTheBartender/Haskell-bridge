@@ -1,46 +1,36 @@
 module Auction where
 import Cards(Board)
 import Calls(Call(..), Level(..), Strain(..), Suit(..),Penalty(..))
-import Player (Direction(..), prev, next, isPartner)
-import Play(Play(..), Contract(..))
+import Player
+import Play
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List (find)
 import Debug.Trace
-
+import Text.Read hiding (get, lift)
 
 data Auction = Auction {calls :: [(Direction,Call)], turn :: Direction} deriving Eq
 
 instance Show Auction where
-  show (Auction calls turn) = line ++ header ++ showCalls calls ++ showTurn turn ++ line
-    where
+  show (Auction calls turn) = header ++ line where
+    align string = " " ++ string ++ replicate (6 - length string) ' '
+    header = 
+      "|" ++ align (show West) ++
+      "|" ++ align (show North) ++
+      "|" ++ align (show East) ++
+      "|" ++ align (show South) ++ "|"
     line = "\n---------------------------------\n"
-    header =  "|" ++ align (show West) ++ "|" ++ align (show North) ++ "|" ++ align (show East) ++ "|" ++ align (show South)
-
-    showTurn South = "|" ++ align "#" ++ "|"
-    showTurn East  = "|" ++ align "#" ++ "|" ++ align "" ++ "|"
-    showTurn North = "|" ++ align "#" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|"
-    showTurn West  = "|" ++ line ++ "|" ++ align "#" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|" ++ align "" ++ "|"
-
-    showCalls [] = ""
-    showCalls ((West, call):xs) = showCalls xs ++ "|" ++ line ++ "|" ++ align(show call)
-    showCalls ((_, call):xs) = showCalls xs ++ "|" ++ align(show call)
-
-    align s | length s <= 5 = " " ++ s ++ take (6 - length s) [' ',' '..]
-
--- auction0 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, (Bid One NoTrump)), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
---
--- auction1 = Auction [(South, Pass), (East, Pass), (North, Pass),(West, Pass), (South, Pass), (East, Pass), (North, Pass), (West, Pass)] North
-
-auction0 = Auction [(South, Pass),(East, Pass),(North, Pass),(West, Pen Redouble),(South, Pen Double),(East, Bid Three (Trump Spade)), (North, Bid Three (Trump Club)), (West, Bid Two (Trump Spade)), (South, Pass), (East, Pen Double), (North, Bid One (Trump Heart)), (West, Pass)] West
+    stringCalls = reverse (show turn):(map show calls)
 
 mkAuction :: Direction -> Auction
 mkAuction turn = Auction [] turn
 
 result :: Auction -> Maybe Contract
-result (Auction ((_, Pass):(_, Pass):(_, Pass):calls) _) = Just $ resultHelper calls
-result _ = Nothing
+result (Auction calls _) = case calls of
+  (_, Pass):(_, Pass):(_, Pass):calls' | length calls' > 0
+    -> Just $ resultHelper calls'
+  _ -> Nothing
 
 resultHelper [(_, Pass)] = FourPasses
 resultHelper ((_, Pass):_) = error "The auction was constructed incorrectily!"
@@ -89,18 +79,33 @@ badConvention = \_ _ -> Pass
 
 runAuction :: ReaderT Convention (ReaderT Board (StateT Auction IO)) Contract
 runAuction = do
-  -- convention <- ask
-  -- board <- lift ask
-  auction <- lift $ lift get
+  auction <- get
+  liftIO $ print auction
   case result auction of
-    Just contract -> do
-      liftIO $ putStrLn "Auction finished"
-      return contract
-    Nothing -> do
+    Just convention -> return convention
+    _ -> do
       board <- lift ask
-      liftIO $ print auction
       case turn auction of
         South -> do
-          liftIO $ print $ availableCalls auction
-          undefined
-        _ -> undefined
+          -- liftIO $ print auction
+          -- liftIO $ print "HAND"
+          call <- liftIO $ getCallFromPlayer auction
+          put $ Auction ((South, call):(calls auction)) (next South)
+          runAuction
+        _ -> do
+          convention <- ask
+          let call = convention board auction
+          if elem call (availableCalls auction)
+            then do
+              put $ Auction ((turn auction, call):(calls auction)) (next $ turn auction)
+              runAuction
+            else error "The convention is written against the rules of the game!"
+getCallFromPlayer :: Auction -> IO Call
+getCallFromPlayer auction = do
+  stringCall <- liftIO getLine
+  case readMaybe stringCall of
+    Just call | elem call (availableCalls auction) -> return call
+    _ -> getCallFromPlayer auction
+
+--- test
+testAuction = Auction [(South, Pass)] (next South)
