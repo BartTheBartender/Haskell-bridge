@@ -100,7 +100,7 @@ badConvention = return Pass
 runAuction :: Convention -> Board -> StateT Auction IO Contract
 runAuction convention board = do
   auction <- get
-  -- liftIO $ system "clear"
+  liftIO $ system "clear"
   liftIO $ print auction
   liftIO $ print (getHand board South)
   case result auction of

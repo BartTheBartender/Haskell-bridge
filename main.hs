@@ -3,7 +3,7 @@ import Calls
 import Auction
 import Play
 import Player
-import SimpleConvention
+import BiddingSAYCSimplified
 
 
 import Control.Monad.Random
@@ -29,8 +29,5 @@ main = do
         start = toEnum $ evalRand (getRandomR (0,3)) gen
     contract <- evalStateT (runAuction simpleConvention board) (mkAuction start)
     print contract
-
-
-
 
 

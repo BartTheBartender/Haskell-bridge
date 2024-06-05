@@ -38,10 +38,11 @@ instance Ord Card where
   compare (Card figure suit) (Card figure' suit') = if suit == suit' then compare figure figure' else compare suit suit'
 
 instance Show Card where
-  show (Card figure Club)    =  show figure ++ show Club
-  show (Card figure Diamond) = "\ESC[31m" ++  show figure ++ show Diamond ++ "\ESC[0m"
-  show (Card figure Heart)   = "\ESC[31m" ++  show figure ++ show Heart ++ "\ESC[0m"
-  show (Card figure Spade)   = show figure ++ show Spade
+  show (Card figure suit) 
+    | suit == Spade || suit == Club = 
+        "\ESC[38;5;16m" ++ show figure ++ show suit ++ "\ESC[0m"  -- Dark black-like color
+    | suit == Heart || suit == Diamond = 
+        "\ESC[38;5;1m" ++ show figure ++ show suit ++ "\ESC[0m"  -- Bright red color
 
 data Hand = Hand [Card]
 
@@ -74,3 +75,10 @@ mkBoard = do
   let north = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 2) helper
   let east  = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 3) helper
   return (Board $ array(minBound, maxBound) [(South, south), (West, west), (North, north), (East, east)])
+
+isMajor :: Suit -> Bool
+isMajor suit = suit == Spade || suit == Heart
+
+isMinor :: Suit -> Bool
+isMinor = not.isMajor
+

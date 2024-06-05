@@ -1,4 +1,4 @@
-module SimpleConvention where
+module BiddingSAYCSimplified where
 import Auction
 import Cards
 import Calls
@@ -112,12 +112,11 @@ opening = do
 
     else return Pass
   -- plain old strong 2
-  else if 6 <= hcp && hcp <= 10
-    then if spades   >= 6 then return $ Bid Calls.Two (Trump Spade)
-    else if hearts   >= 6 then return $ Bid Calls.Two (Trump Heart)
-    else if diamonds >= 6 then return $ Bid Calls.Two (Trump Diamond)
-    else if clubs    >= 6 then return $ Bid Calls.Two (Trump Club)
-    else return Pass
+  else if 22 <= hcp
+    then if spades   >= 5 then return $ Bid Calls.Two (Trump Spade)
+    else if hearts   >= 5 then return $ Bid Calls.Two (Trump Heart)
+    else if diamonds >= 5 then return $ Bid Calls.Two (Trump Diamond)
+    else return $ Bid Calls.Two (Trump Club)
   else return Pass
 
 -- simplified SAYC
@@ -135,9 +134,9 @@ overcall opening = do
       else return $ Bid Calls.One (Trump $ fst longest)
   else return Pass
 
--- really simplified SAYC
+-- really simplified SAYC - assumes bots sign-off the auction
 response :: Call -> Convention
-response (Bid One NoTrump) = do
+response (Bid Calls.One NoTrump) = do
   hand <- lift $ ask
   let hcp = highCardPoints hand
   if 10 <= hcp then do
@@ -148,7 +147,51 @@ response (Bid One NoTrump) = do
     auction <- ask
     let _2NT = Bid Calls.Two NoTrump
     if elem _2NT (availableCalls auction) then return _2NT else return Pass
-
   else return Pass
--- response (Bid One (Trump suit)) = do
---   hand <-
+
+response (Bid Calls.Two NoTrump) = do
+  hand <- lift $ ask
+  let hcp = highCardPoints hand
+  if 4 <= hcp then do
+    auction <- ask
+    let _3NT = Bid Calls.Two NoTrump
+    if elem _3NT (availableCalls auction) then return _3NT else return Pass
+  else return Pass
+
+response (Bid Calls.One (Trump suit)) = do
+  hand <- lift $ ask
+  let hcp = highCardPoints hand
+  if hcp <= 6 then return Pass
+  else 
+    let cardsInSuit = nofCards hand suit
+        fit = if isMajor suit then cardsInSuit >= 3 else cardsInSuit >= 5
+    in if fit 
+       then 
+         return $ if hcp <= 9 then Bid Calls.Two (Trump suit)
+                  else if hcp <= 12 then Bid Calls.Three (Trump suit)
+                  else Bid Calls.Four (Trump suit)
+       else return Pass
+
+-- this is a disgrace to sayc, but bots are not clever enough
+response (Bid Calls.Two (Trump Club)) = do
+  hand <- lift $ ask
+  let hcp = highCardPoints hand
+  if hcp <= 2 then return $ Pass
+  else 
+    let fit = nofCards hand Club >= 5
+    in if fit then return $ Bid Calls.Five (Trump Club)
+    else return $ Bid Calls.Three NoTrump
+
+response (Bid Calls.Two (Trump suit)) = do
+  hand <- lift $ ask
+  let hcp = highCardPoints hand
+  if hcp <= 2 then return $ Pass
+  else 
+    let cardsInSuit = nofCards hand suit
+        fit = if isMajor suit then cardsInSuit >= 3 else cardsInSuit >= 5
+    in if fit 
+      then if isMajor suit then return $ Bid Calls.Four (Trump suit)
+      else return $ Bid Calls.Five (Trump suit)
+    else return $ Bid Calls.Three NoTrump
+
+response _ = return Pass
