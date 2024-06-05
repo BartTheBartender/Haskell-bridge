@@ -3,7 +3,7 @@ import Calls
 import Auction
 import Play
 import Player
-import SAYC
+import SimpleConvention
 
 
 import Control.Monad.Random
