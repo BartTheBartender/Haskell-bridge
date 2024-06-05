@@ -81,3 +81,11 @@ instance Read Call where
         strain <- readPrec
         return (Bid level strain)
     ]
+
+isMajor :: Strain -> Bool
+isMajor (Trump suit) = suit == Spade || suit == Heart
+isMajor _ = False
+
+isMinor :: Strain -> Bool
+isMinor (Trump suit) = suit == Diamond || suit == Club
+isMinor _ = False
