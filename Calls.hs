@@ -1,5 +1,5 @@
-module Calls(Call(..), Level(..), Strain(..), Suit(..), Penalty(..)) where
-import Cards (Suit(..))
+module Calls where
+import Cards
 
 import Text.Read
 
@@ -41,24 +41,11 @@ instance Read Strain where
 data Level = One | Two | Three | Four | Five | Six | Seven deriving (Eq, Ord, Enum, Bounded)
 
 instance Show Level where
-  show Seven = show 7
-  show Six   = show 6
-  show Five  = show 5
-  show Four  = show 4
-  show Three = show 3
-  show Two   = show 2
-  show One   = show 1
+  show level = show (fromEnum level + 1)
 
 instance Read Level where
-  readPrec = toLevel <$> readPrec where 
-    toLevel 1 = One
-    toLevel 2 = Two
-    toLevel 3 = Three
-    toLevel 4 = Four
-    toLevel 5 = Five
-    toLevel 6 = Six
-    toLevel 7 = Seven
-    toLevel _ = error "This is not a correct level"
+  readPrec = toLevel <$> readPrec where
+    toLevel x = toEnum (x - 1)
 
 data Penalty = Double | Redouble deriving (Eq, Ord, Enum, Bounded)
 

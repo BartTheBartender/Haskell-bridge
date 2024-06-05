@@ -29,9 +29,18 @@ instance Show Auction where
       spacesBack = 3 - fromEnum turn
     chunks xs = if length xs == 0 then [] else (take 4 xs):(chunks $ drop 4 xs)
 
+stepBack :: Auction -> Auction
+stepBack (Auction (_:calls) turn) = Auction calls (pred turn)
 
 mkAuction :: Direction -> Auction
 mkAuction turn = Auction [] turn
+
+nofCalls :: Auction -> Int
+nofCalls = length.calls
+
+lastCall :: Auction -> Call
+lastCall (Auction ((_, call):_) _) = call
+lastCall auction = error $ "The auction didn't start\n" ++ show auction
 
 addCall :: Auction -> Call -> Auction
 addCall (Auction calls turn) call = Auction ((turn,call):calls) (next turn)
@@ -91,13 +100,14 @@ badConvention = return Pass
 runAuction :: Convention -> Board -> StateT Auction IO Contract
 runAuction convention board = do
   auction <- get
+  -- liftIO $ system "clear"
+  liftIO $ print auction
+  liftIO $ print (getHand board South)
   case result auction of
     Just contract -> return contract
     Nothing -> do
       case turn auction of
         South -> do
-          liftIO $ print auction
-          liftIO $ print (getHand board South)
           call <- liftIO $ getCallFromPlayer auction
           put $ addCall auction call
           runAuction convention board

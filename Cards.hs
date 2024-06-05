@@ -1,5 +1,5 @@
-module Cards (Suit(..), Figure(..), Card(..), Board, mkBoard, Hand(..), getHand) where
-import Player(Direction(..), next)
+module Cards where
+import Player
 
 import System.Random.Shuffle (shuffleM)
 import Control.Monad.Random
@@ -38,7 +38,10 @@ instance Ord Card where
   compare (Card figure suit) (Card figure' suit') = if suit == suit' then compare figure figure' else compare suit suit'
 
 instance Show Card where
-  show (Card figure suit) = show figure ++ show suit
+  show (Card figure Club)    =  show figure ++ show Club
+  show (Card figure Diamond) = "\ESC[31m" ++  show figure ++ show Diamond ++ "\ESC[0m"
+  show (Card figure Heart)   = "\ESC[31m" ++  show figure ++ show Heart ++ "\ESC[0m"
+  show (Card figure Spade)   = show figure ++ show Spade
 
 data Hand = Hand [Card]
 
