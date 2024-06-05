@@ -1,4 +1,4 @@
-module Cards (Suit(..), Figure, Card, suit, figure, Board, mkBoard) where
+module Cards (Suit(..), Figure(..), Card(..), Board, mkBoard, Hand(..), getHand) where
 import Player(Direction(..), next)
 
 import System.Random.Shuffle (shuffleM)
@@ -40,12 +40,15 @@ instance Ord Card where
 instance Show Card where
   show (Card figure suit) = show figure ++ show suit
 
-data Hand =  Hand [Card]
+data Hand = Hand [Card]
 
 instance Show Hand where
-  show _ = " "
+  show (Hand xs) = intercalate " " $ map show xs
 
 data Board = Board (Array Direction Hand)
+
+getHand :: Board -> Direction -> Hand
+getHand (Board arr) direction = arr ! direction
 
 instance Show Board where
   show (Board arr) = 

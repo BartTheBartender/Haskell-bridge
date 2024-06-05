@@ -1,30 +1,40 @@
 module Auction where
-import Cards(Board)
-import Calls(Call(..), Level(..), Strain(..), Suit(..),Penalty(..))
+import Cards
+import Calls
 import Player
 import Play
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (find)
+import Data.List (find, intercalate)
 import Debug.Trace
 import Text.Read hiding (get, lift)
+import System.Process
 
 data Auction = Auction {calls :: [(Direction,Call)], turn :: Direction} deriving Eq
 
 instance Show Auction where
-  show (Auction calls turn) = header ++ line where
+  show (Auction calls turn) = intercalate line $
+    map (\x -> "|" ++ (intercalate "|" x) ++ "|") (chunks cells) where
     align string = " " ++ string ++ replicate (6 - length string) ' '
-    header = 
-      "|" ++ align (show West) ++
-      "|" ++ align (show North) ++
-      "|" ++ align (show East) ++
-      "|" ++ align (show South) ++ "|"
     line = "\n---------------------------------\n"
-    stringCalls = reverse (show turn):(map show calls)
+    cells = map align $
+            map show [West, North, East, South] ++
+            replicate spacesFront " " ++
+            reverse (map (show.snd) calls) ++
+            ["#"] ++ 
+            replicate spacesBack " " where
+      spacesFront = 
+        if length calls == 0 then fromEnum turn else fromEnum $ fst (last calls)
+      spacesBack = 3 - fromEnum turn
+    chunks xs = if length xs == 0 then [] else (take 4 xs):(chunks $ drop 4 xs)
+
 
 mkAuction :: Direction -> Auction
 mkAuction turn = Auction [] turn
+
+addCall :: Auction -> Call -> Auction
+addCall (Auction calls turn) call = Auction ((turn,call):calls) (next turn)
 
 result :: Auction -> Maybe Contract
 result (Auction calls _) = case calls of
@@ -74,32 +84,35 @@ availableCalls (Auction calls turn) =
 
 higherBids level strain = [(level, strain') | strain' <- [strain..maxBound], strain' /= strain] ++ [(level', strain') | strain' <-[minBound..maxBound], level' <- [minBound..maxBound], level' > level]
 
-type Convention = Board -> Auction -> Call
-badConvention = \_ _ -> Pass
+type Convention = ReaderT Auction (Reader Hand) Call
+badConvention :: Convention
+badConvention = return Pass
 
-runAuction :: ReaderT Convention (ReaderT Board (StateT Auction IO)) Contract
-runAuction = do
+runAuction :: Convention -> Board -> StateT Auction IO Contract
+runAuction convention board = do
   auction <- get
-  liftIO $ print auction
   case result auction of
-    Just convention -> return convention
-    _ -> do
-      board <- lift ask
+    Just contract -> return contract
+    Nothing -> do
       case turn auction of
         South -> do
-          -- liftIO $ print auction
-          -- liftIO $ print "HAND"
+          liftIO $ print auction
+          liftIO $ print (getHand board South)
           call <- liftIO $ getCallFromPlayer auction
-          put $ Auction ((South, call):(calls auction)) (next South)
-          runAuction
+          put $ addCall auction call
+          runAuction convention board
         _ -> do
-          convention <- ask
-          let call = convention board auction
+          let hand = getHand board (turn auction)
+              call = runReader (runReaderT convention auction) hand
           if elem call (availableCalls auction)
             then do
-              put $ Auction ((turn auction, call):(calls auction)) (next $ turn auction)
-              runAuction
-            else error "The convention is written against the rules of the game!"
+              put $ addCall auction call
+              runAuction convention board
+            else
+              error $ 
+                "Convention is incorrect - tried to make call " ++ show call ++
+                " in auction " ++ show auction ++ "."
+
 getCallFromPlayer :: Auction -> IO Call
 getCallFromPlayer auction = do
   stringCall <- liftIO getLine
@@ -108,4 +121,5 @@ getCallFromPlayer auction = do
     _ -> getCallFromPlayer auction
 
 --- test
-testAuction = Auction [(South, Pass)] (next South)
+testAuction = Auction [(East, Bid One NoTrump), (North, Pass), (West, Pass),(South, Pass)] (next East)
+

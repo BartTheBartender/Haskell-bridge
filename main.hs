@@ -2,26 +2,25 @@ import Cards
 import Calls
 import Auction
 import Play
-import Player(Direction(..))
+import Player
+import SAYC
+
 
 import Control.Monad.Random
 import Control.Monad.Reader
 import Control.Monad.State
 
-main :: IO ()
-main = do
-    -- Generate a random seed
+import System.Process
+import System.IO.Unsafe (unsafePerformIO)
+board :: Board
+board = unsafePerformIO $ do
     gen <- newStdGen
+    return $ evalRand mkBoard gen
 
-    -- Create a random board
+s = getHand board South
+
+main = do
+    gen <- newStdGen
     let board = evalRand mkBoard gen
-    print board
-
-    -- Create an initial auction
-    let initialAuction = mkAuction South
-
-    -- Run the auction using badConvention
-    resultContract <- evalStateT (runReaderT (runReaderT runAuction badConvention) board) initialAuction
-
-    print resultContract
-
+    contract <- evalStateT (runAuction badConvention board) (mkAuction West)
+    print contract
