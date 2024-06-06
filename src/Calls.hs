@@ -6,13 +6,11 @@ import Text.Read
 data Strain = Trump Suit | NoTrump deriving (Eq, Ord)
 
 instance Enum Strain where
-  toEnum :: Int -> Strain
   toEnum n
     | n >= 0 && n <= 3 = Trump (toEnum n)
     | n == 4 = NoTrump
     | otherwise = error "Invalid enum value for Strain"
 
-  fromEnum :: Strain -> Int
   fromEnum (Trump suit) = fromEnum suit
   fromEnum NoTrump = 4
 
