@@ -1,4 +1,4 @@
-module Player(Direction(..), next, prev, isPartner, isOpponent) where
+module Player where
 import Data.Array
 
 data Direction = West | North | East | South deriving (Show, Eq, Enum, Ord, Bounded, Ix)

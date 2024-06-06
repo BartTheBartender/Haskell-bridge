@@ -54,6 +54,15 @@ data Board = Board (Array Direction Hand)
 getHand :: Board -> Direction -> Hand
 getHand (Board arr) direction = arr ! direction
 
+playCard :: Card -> Board -> Board
+playCard card board = if cardFound 
+  then updatedBoard 
+  else error $ "The card " ++ show card ++ " was not in the board!" where
+  updatedBoard = Board $ array (minBound, maxBound) $
+    map (\(direction, Hand hand) -> (direction, Hand (hand \\ [card]))) boardAsList
+  cardFound = length (filter (\(_, Hand hand) -> elem card hand) boardAsList) == 1
+  boardAsList = map (\direction -> (direction, getHand board direction)) [minBound..maxBound]
+
 instance Show Board where
   show (Board arr) = 
     show South ++ ": " ++ show (arr ! South) ++ "\n" ++
