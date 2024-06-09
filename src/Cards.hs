@@ -54,14 +54,8 @@ data Board = Board (Array Direction Hand)
 getHand :: Board -> Direction -> Hand
 getHand (Board arr) direction = arr ! direction
 
-playCard :: Card -> Board -> Board
-playCard card board = if cardFound 
-  then updatedBoard 
-  else error $ "The card " ++ show card ++ " was not in the board!" where
-  updatedBoard = Board $ array (minBound, maxBound) $
-    map (\(direction, Hand hand) -> (direction, Hand (hand \\ [card]))) boardAsList
-  cardFound = length (filter (\(_, Hand hand) -> elem card hand) boardAsList) == 1
-  boardAsList = map (\direction -> (direction, getHand board direction)) [minBound..maxBound]
+isEmpty :: Board -> Bool
+isEmpty board = all null $ map (\(Hand h) -> h) $ map (getHand board) [minBound..maxBound]
 
 instance Show Board where
   show (Board arr) = 
@@ -84,6 +78,16 @@ mkBoard = do
   let north = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 2) helper
   let east  = Hand $ sort $ map(snd) $ filter(\x -> (fst x) `mod` 4 == 3) helper
   return (Board $ array(minBound, maxBound) [(South, south), (West, west), (North, north), (East, east)])
+
+playCard :: Board -> Direction -> Card -> Board
+playCard board direction card = if elem card cards 
+  then 
+    Board $ array (minBound, maxBound) $
+      map (\(dir, Hand cards) -> (dir, Hand $ filter (\c -> c /= card) cards)) $
+      map (\dir -> (dir, getHand board dir)) [minBound..maxBound]
+  else error $ "the card " ++ show card ++ " doesn't belong to " ++ show direction
+  where
+    Hand cards = getHand board direction
 
 isMajor :: Suit -> Bool
 isMajor suit = suit == Spade || suit == Heart

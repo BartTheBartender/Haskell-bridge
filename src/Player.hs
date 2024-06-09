@@ -15,8 +15,11 @@ prev North = West
 prev East = North
 prev South = East
 
+partner :: Direction -> Direction
+partner = next.next
+
 isPartner :: Direction -> Direction -> Bool
-isPartner direction direction' = direction' == direction || direction' == next (next direction)
+isPartner direction direction' = direction' == direction || (direction' == partner direction)
 
 isOpponent :: Direction -> Direction -> Bool
 isOpponent = (not .) . isPartner
