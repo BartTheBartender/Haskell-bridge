@@ -125,7 +125,7 @@ runAuction convention board = do
 
 getCallFromPlayer :: Auction -> IO Call
 getCallFromPlayer auction = do
-  stringCall <- liftIO getLine
+  stringCall <- getLine
   case readMaybe stringCall of
     Just call | elem call (availableCalls auction) -> return call
     _ -> getCallFromPlayer auction
