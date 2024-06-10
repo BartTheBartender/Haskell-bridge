@@ -5,7 +5,8 @@ import Calls
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate)
+import Data.List (intercalate, intersperse)
+import Debug.Trace
 
 data Contract = Contract 
   {level :: Level, strain :: Strain, penalty :: Maybe Penalty, dealer :: Direction} | FourPasses deriving (Show, Eq)
@@ -20,10 +21,61 @@ data Game = Game {
   nofTricks :: Int}
 
 instance Show Game where
-  show game = undefined
+  show game = line ++ "\n" ++ north ++ "\n" ++ vertical ++ south ++ "\n" ++ line where
+  -- show game = show trick where
+
+    stringifiedHands ::[[String]] = map (map align) $
+      map (\(dir, cards) -> if dir == South || dir == dummy game
+        then map show cards
+        else map (const "\ESC[32;5;16m\x1F0A0\ESC[0m") cards) $
+      map (\(dir, Hand hand) -> (dir,hand)) $
+      map (\dir -> (dir, getHand (board game) dir)) [minBound..maxBound]
+
+    align "" = "   "
+    align card = card ++ (replicate (17 - length card) ' ')
+    
+    north = align "" ++
+      (concat $ map align (
+        (stringifiedHands !! 1) ++ (replicate 
+        (13 - length (stringifiedHands !! 1)) "")
+      )) ++ align ""
+    south = align "" ++
+      (concat $ map align (
+        (stringifiedHands !! 3) ++ (replicate 
+        (13 - length (stringifiedHands !! 3)) "")
+      )) ++ align ""
+
+    verticalRaw = take (max 
+      (length $ stringifiedHands !! 0) 
+      (length $ stringifiedHands !! 2)) $
+      zip ((stringifiedHands !! 0) ++ replicate 13 "")
+          ((stringifiedHands !! 2) ++ replicate 13 "")
+
+    vertical = unlines $ map 
+      (\((w,e),idx) -> case idx of
+        2 ->
+          w ++ concat (replicate 6 $ align "") ++ trick !! 1 ++ concat (replicate 6 $ align "") ++ e
+        10 ->
+          w ++ concat (replicate 6 $ align "") ++ trick !! 3 ++ concat (replicate 6 $ align "") ++ e
+        6 ->
+          w ++ concat (replicate 3 $ align "") ++ trick !! 0 ++
+          concat (replicate 5 $ align "") ++ trick !! 2 ++
+          concat (replicate 3 $ align "") ++ e
+
+        _ ->
+          w ++ concat (replicate 13 $ align "") ++ e) 
+        $ zip verticalRaw [0,1..]
+
+    line = replicate 43 '-'
+    trick = map align $ reverse $ 
+      shift n $ (replicate (4 - length curr) "") ++ map show curr where
+      curr = currentTrick game
+      n = fromEnum $ lead game
+      shift 0 xs = xs
+      shift n (x:xs) = shift (n-1) (xs ++ [x])
 
 dummy :: Game -> Direction
-dummy = next.next.lead
+dummy game = next.next.dealer $ contract game
 
 turn' :: Game -> Direction
 turn' game = last $ take ((length $ currentTrick $ game) + 1) $ iterate next (lead game)
@@ -48,10 +100,6 @@ availableCards :: Trick -> Hand -> [Card]
 availableCards trick (Hand hand) = if null filtered then hand else filtered where
   filtered = if null trick then hand else filter (\card -> suit card == (suit $ last trick)) hand
 
--- a private function. assumes that everything is correct. i.e
--- + game and card are well-defined
--- + the card is played by the turn game
--- + the card is available
 advance :: Card -> Game -> Game
 advance card game = 
   if elem card (availableCards trick (getHand board' turn''))
@@ -67,6 +115,11 @@ advance card game =
 type Dummy = Hand
 type PlayingConvention = ReaderT Contract (Reader Hand) Card
 
+badPlayingConvention :: PlayingConvention
+badPlayingConvention = do
+  hand <- lift ask
+  return $ last $ availableCards [] hand
+
 openGame :: PlayingConvention -> Contract -> Board -> IO Game
 openGame convention contract board = do
   let lead = next $ dealer $ contract
@@ -74,10 +127,11 @@ openGame convention contract board = do
   case lead of
     South -> do
       card <- evalStateT (getCardFromPlayer hand) 0
-      return $ Game contract lead board [card] 0
+      return $ Game contract lead (playCard board lead card) [card] 0
     _ -> do
       let card = runReader (runReaderT convention contract) hand
-      return $ Game contract lead board [card] 0
+      return $ Game contract lead (playCard board lead card) [card] 0
+
 
 playGame :: ReaderT PlayingConvention (StateT Game IO) Int
 playGame = do

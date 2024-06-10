@@ -22,16 +22,17 @@ board' = unsafePerformIO $ do
 
 s = getHand board' South
 
+c = Contract {level = Calls.Two, strain = Trump Club, penalty = Just Double, dealer = prev South}
+
 main :: IO ()
 main = do
-  card <- evalStateT (getCardFromPlayer s) 0
-  putStrLn $ "You selected: " ++ show card
+  play <- openGame badPlayingConvention c board'
+  -- print $ dummy play
+  print play
+--
+-- main = do
+--   mapM (putStrLn) $ map (\x -> "\ESC[" ++ show x ++";5;16m" ++ " " ++ show x ++ "\ESC[0m") [0,1..255]
 
-printWithWhiteBackground :: String -> IO ()
-printWithWhiteBackground str = do
-    putStr "\ESC[47m"  -- Set background to white
-    putStr str
-    putStr "\ESC[49m"  -- Reset background color to default
 
 -- main = do
 --     gen <- newStdGen

@@ -40,10 +40,9 @@ instance Ord Card where
 instance Show Card where
   show (Card figure suit) 
     | suit == Spade || suit == Club = 
-        "\ESC[38;5;16m" ++ show figure ++ show suit ++ "\ESC[0m"  -- Dark black-like color
+        "\ESC[38;5;16m" ++ show figure ++ show suit ++ "\ESC[0m"
     | suit == Heart || suit == Diamond = 
-        "\ESC[38;5;1m" ++ show figure ++ show suit ++ "\ESC[0m"  -- Bright red color
-
+        "\ESC[31;5;16m" ++ show figure ++ show suit ++ "\ESC[0m"
 data Hand = Hand [Card]
 
 instance Show Hand where
