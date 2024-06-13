@@ -1,4 +1,4 @@
-module BiddingSAYCSimplified where
+module Conventions where
 import Auction
 import Cards
 import Calls
@@ -53,8 +53,6 @@ responseOn auction
     Bid level strain -> Just $ Bid level strain
     _ -> Nothing
   | otherwise = Nothing
-
-
 
 simpleConvention :: Convention
 simpleConvention = do

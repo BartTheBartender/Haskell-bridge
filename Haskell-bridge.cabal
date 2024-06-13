@@ -14,12 +14,12 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall -Wno-name-shadowing -Wextra
+    ghc-options: -Wall -Wno-name-shadowing -Wextra -XScopedTypeVariables
 
 executable Haskell-bridge
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Player, Calls, Auction, Play, BiddingSAYCSimplified, Cards
+    other-modules:    Player, Calls, Auction, Game, BiddingSAYCSimplified, Cards, Introduction
     -- other-extensions:
     build-depends:    base ^>=4.17.2.1, array, random-shuffle, MonadRandom,
       mtl, process, ansi-terminal

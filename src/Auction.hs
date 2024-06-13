@@ -2,7 +2,7 @@ module Auction where
 import Cards
 import Calls
 import Player
-import Play
+import Game
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -100,15 +100,16 @@ badConvention = return Pass
 runAuction :: Convention -> Board -> StateT Auction IO Contract
 runAuction convention board = do
   auction <- get
-  liftIO $ system "clear"
-  liftIO $ print auction
-  liftIO $ print (getHand board South)
   case result auction of
     Just contract -> return contract
     Nothing -> do
+      
       case turn auction of
         South -> do
-          call <- liftIO $ getCallFromPlayer auction
+          lift $ system "clear"
+          lift $ print auction
+          lift $ print (getHand board South)
+          call <- lift $ getCallFromPlayer auction
           put $ addCall auction call
           runAuction convention board
         _ -> do
@@ -129,7 +130,4 @@ getCallFromPlayer auction = do
   case readMaybe stringCall of
     Just call | elem call (availableCalls auction) -> return call
     _ -> getCallFromPlayer auction
-
---- test
-testAuction = Auction [(East, Bid One NoTrump), (North, Pass), (West, Pass),(South, Pass)] (next East)
 

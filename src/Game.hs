@@ -1,4 +1,4 @@
-module Play where
+module Game where
 import Player
 import Cards
 import Calls
@@ -21,18 +21,32 @@ data Game = Game {
   nofTricks :: Int}
 
 instance Show Game where
-  show game = line ++ "\n" ++ north ++ "\n" ++ vertical ++ south ++ "\n" ++ line where
-  -- show game = show trick where
+  show game = 
+    show (dealer contract') ++ ": " ++
+    show (level contract') ++ show (strain contract') ++ pen ++ 
+    ", tricks: " ++ show (nofTricks game) ++ 
+    "/" ++ show (nofDeclaredTricks game) ++
 
-    stringifiedHands ::[[String]] = map (map align) $
+    "\n" ++ line ++ "\n" ++
+    north ++ "\n" ++ vertical ++ "\n" ++ south
+    ++ "\n" ++ line where
+
+    contract' = contract game
+    pen = case penalty contract' of
+      Just x -> show x
+      _ -> ""
+
+    stringifiedHands =
       map (\(dir, cards) -> if dir == South || dir == dummy game
         then map show cards
         else map (const "\ESC[32;5;16m\x1F0A0\ESC[0m") cards) $
       map (\(dir, Hand hand) -> (dir,hand)) $
       map (\dir -> (dir, getHand (board game) dir)) [minBound..maxBound]
-
+    
+    align :: String -> String
     align "" = "   "
-    align card = card ++ (replicate (17 - length card) ' ')
+    align card |length card <= 17
+      = card ++ (replicate (17 - length card) ' ')
     
     north = align "" ++
       (concat $ map align (
@@ -51,23 +65,25 @@ instance Show Game where
       zip ((stringifiedHands !! 0) ++ replicate 13 "")
           ((stringifiedHands !! 2) ++ replicate 13 "")
 
-    vertical = unlines $ map 
-      (\((w,e),idx) -> case idx of
+    vertical = unlines $ map concat $ map (map align) $
+      map (\((w,e),idx) -> case idx of
         2 ->
-          w ++ concat (replicate 6 $ align "") ++ trick !! 1 ++ concat (replicate 6 $ align "") ++ e
+          [w] ++ (replicate 6 "") ++ [trick !! 1] ++ 
+          (replicate 6 "") ++ [e]
         10 ->
-          w ++ concat (replicate 6 $ align "") ++ trick !! 3 ++ concat (replicate 6 $ align "") ++ e
+          [w] ++ (replicate 6 "") ++ [trick !! 3] ++
+          (replicate 6 "") ++ [e]
         6 ->
-          w ++ concat (replicate 3 $ align "") ++ trick !! 0 ++
-          concat (replicate 5 $ align "") ++ trick !! 2 ++
-          concat (replicate 3 $ align "") ++ e
+          [w] ++ (replicate 3 "") ++ [trick !! 0] ++
+          (replicate 5 "") ++ [trick !! 2] ++
+          (replicate 3 "") ++ [e]
 
         _ ->
-          w ++ concat (replicate 13 $ align "") ++ e) 
-        $ zip verticalRaw [0,1..]
+          [w] ++ (replicate 13 "") ++ [e]
+        ) $ zip verticalRaw [0,1..]
 
     line = replicate 43 '-'
-    trick = map align $ reverse $ 
+    trick = reverse $ 
       shift n $ (replicate (4 - length curr) "") ++ map show curr where
       curr = currentTrick game
       n = fromEnum $ lead game
@@ -80,6 +96,9 @@ dummy game = next.next.dealer $ contract game
 turn' :: Game -> Direction
 turn' game = last $ take ((length $ currentTrick $ game) + 1) $ iterate next (lead game)
 
+nofDeclaredTricks :: Game -> Int
+nofDeclaredTricks game = 
+  (fromEnum $ level $ contract game) + 7
 
 --helper function. Assumes game is finished
 score :: Game -> Int

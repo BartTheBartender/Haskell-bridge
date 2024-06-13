@@ -1,24 +1,21 @@
 import Cards
 import Calls
 import Auction hiding (turn)
-import Play
+import Game
 import Player
-import BiddingSAYCSimplified
+import Conventions
 
 
-import Control.Monad.Random
 import Control.Monad.Reader
 import Control.Monad.State
-
 import System.Process
-import System.IO.Unsafe (unsafePerformIO)
-
 import System.Console.ANSI
+import System.Random (newStdGen)
 
+import System.IO.Unsafe (unsafePerformIO)
 board' :: Board
 board' = unsafePerformIO $ do
-    gen <- newStdGen
-    return $ evalRand mkBoard gen
+  mkBoard
 
 s = getHand board' South
 
@@ -40,6 +37,6 @@ main = do
 --     let start :: Direction
 --         start = toEnum $ evalRand (getRandomR (0,3)) gen
 --     contract <- evalStateT (runAuction simpleConvention board) (mkAuction start)
---     print contract
+    -- print contract
 
 

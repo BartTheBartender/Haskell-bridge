@@ -48,15 +48,15 @@ instance Read Level where
 data Penalty = Double | Redouble deriving (Eq, Ord, Enum, Bounded)
 
 instance Show Penalty where
-  show Double = "X"
-  show Redouble = "XX"
+  show Double = "x"
+  show Redouble = "xx"
 
 instance Read Penalty where
   readPrec = parens $ do
     Ident str <- lexP
     case str of
-      "X"  -> return Double
-      "XX" -> return Redouble
+      "x"  -> return Double
+      "xx" -> return Redouble
       _    -> pfail
 
 data Call = Pass |Pen Penalty| Bid Level Strain deriving Eq
