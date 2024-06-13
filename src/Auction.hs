@@ -2,7 +2,7 @@ module Auction where
 import Cards
 import Calls
 import Player
-import Game
+import Game (Contract(..))
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -93,11 +93,9 @@ availableCalls (Auction calls turn) =
 
 higherBids level strain = [(level, strain') | strain' <- [strain..maxBound], strain' /= strain] ++ [(level', strain') | strain' <-[minBound..maxBound], level' <- [minBound..maxBound], level' > level]
 
-type Convention = ReaderT Auction (Reader Hand) Call
-badConvention :: Convention
-badConvention = return Pass
+type BiddingConvention = ReaderT Auction (Reader Hand) Call
 
-runAuction :: Convention -> Board -> StateT Auction IO Contract
+runAuction :: BiddingConvention -> Board -> StateT Auction IO Contract
 runAuction convention board = do
   auction <- get
   case result auction of

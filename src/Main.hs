@@ -23,7 +23,7 @@ c = Contract {level = Calls.Two, strain = Trump Club, penalty = Just Double, dea
 
 main :: IO ()
 main = do
-  play <- openGame badPlayingConvention c board'
+  play <- openGame badOpeningConvention c board'
   -- print $ dummy play
   print play
 --

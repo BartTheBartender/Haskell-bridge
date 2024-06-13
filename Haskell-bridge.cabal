@@ -19,9 +19,8 @@ common warnings
 executable Haskell-bridge
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Player, Calls, Auction, Game, BiddingSAYCSimplified, Cards, Introduction
+    other-modules:    Player, Calls, Auction, Game, Conventions, Cards, Introduction
     -- other-extensions:
-    build-depends:    base ^>=4.17.2.1, array, random-shuffle, MonadRandom,
-      mtl, process, ansi-terminal
+    build-depends:    base ^>=4.17.2.1, array, random, random-shuffle, mtl, process, ansi-terminal
     hs-source-dirs:   src
     default-language: Haskell2010

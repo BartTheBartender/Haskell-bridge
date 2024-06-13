@@ -1,4 +1,18 @@
-module Game where
+module Game (
+  Contract(..),
+  Game(..),
+  Trick(..),
+  dummy,
+  turn,
+  nofDeclaredTricks,
+  availableCards,
+  PlayingConvention,
+  openGame,
+  playGame,
+
+  badOpeningConvention
+  ) where
+
 import Player
 import Cards
 import Calls
@@ -93,8 +107,8 @@ instance Show Game where
 dummy :: Game -> Direction
 dummy game = next.next.dealer $ contract game
 
-turn' :: Game -> Direction
-turn' game = last $ take ((length $ currentTrick $ game) + 1) $ iterate next (lead game)
+turn :: Game -> Direction
+turn game = last $ take ((length $ currentTrick $ game) + 1) $ iterate next (lead game)
 
 nofDeclaredTricks :: Game -> Int
 nofDeclaredTricks game = 
@@ -102,7 +116,7 @@ nofDeclaredTricks game =
 
 --helper function. Assumes game is finished
 score :: Game -> Int
-score game = 0
+score game = 111111111111111
 
 trickWinner :: Game -> Maybe Direction
 trickWinner game
@@ -121,25 +135,25 @@ availableCards trick (Hand hand) = if null filtered then hand else filtered wher
 
 advance :: Card -> Game -> Game
 advance card game = 
-  if elem card (availableCards trick (getHand board' turn''))
+  if elem card (availableCards trick $ getHand board' turn')
     then 
-      game {currentTrick = (card:trick), board = (playCard board' turn'' card)} 
+      game {currentTrick = (card:trick), board = (playCard board' turn' card)} 
     else 
       error $ "The card " ++ show card ++ "is not available." 
     where
-  turn'' = turn' game
+  turn' = turn game
   board' = board game
   trick = currentTrick game
 
 type Dummy = Hand
-type PlayingConvention = ReaderT Contract (Reader Hand) Card
+type OpeningConvention = ReaderT Contract (Reader Hand) Card
 
-badPlayingConvention :: PlayingConvention
-badPlayingConvention = do
+badOpeningConvention :: OpeningConvention
+badOpeningConvention = do
   hand <- lift ask
   return $ last $ availableCards [] hand
 
-openGame :: PlayingConvention -> Contract -> Board -> IO Game
+openGame :: OpeningConvention -> Contract -> Board -> IO Game
 openGame convention contract board = do
   let lead = next $ dealer $ contract
   let hand = getHand board lead
@@ -150,6 +164,8 @@ openGame convention contract board = do
     _ -> do
       let card = runReader (runReaderT convention contract) hand
       return $ Game contract lead (playCard board lead card) [card] 0
+
+type PlayingConvention = ReaderT Contract (Reader Hand) Card
 
 
 playGame :: ReaderT PlayingConvention (StateT Game IO) Int
@@ -168,10 +184,10 @@ playGame = do
           playGame
 
     Nothing -> do
-      let turn'' = turn' game
-          hand = getHand (board game) turn''
+      let turn' = turn game
+          hand = getHand (board game) turn'
       lift $ lift $ print game
-      if (isPartner turn'' South) && (isPartner (dealer $ contract game) South)
+      if (isPartner turn' South) && (isPartner (dealer $ contract game) South)
         then do
           let cardM :: (StateT Int IO) Card = do
                 card <- getCardFromPlayer hand
@@ -186,9 +202,6 @@ playGame = do
           let card = runReader (runReaderT convention (contract game)) hand
           lift $ modify $ advance card
           playGame
-
-
-
 
 getCardFromPlayer :: Hand -> StateT Int IO Card
 getCardFromPlayer hand@(Hand cards) = do

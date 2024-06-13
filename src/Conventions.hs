@@ -1,4 +1,6 @@
-module Conventions where
+module Conventions (
+  biddingConvention
+  ) where
 import Auction
 import Cards
 import Calls
@@ -7,6 +9,8 @@ import Player
 import Control.Monad.Reader
 import Data.Maybe
 import Debug.Trace
+
+-- general utility functions
 
 highCardPoints :: Hand -> Int
 highCardPoints (Hand cards) = foldl (\acc card -> case figure card of
@@ -31,6 +35,22 @@ isBalanced :: Hand -> Bool
 isBalanced hand = all (>2) distribution && length (filter (==2) distribution) <= 2
   where distribution = map (nofCards hand) [minBound..maxBound]
 
+-- the default bidding convention
+
+biddingConvention :: BiddingConvention
+biddingConvention = do
+  auction <- ask
+  hand <- lift $ ask
+  -- opening
+  if isOpening auction then opening
+  -- overcall
+  else if isJust $ overcallAfter auction then let Just opening = overcallAfter auction
+    in overcall opening
+  -- response
+  else if isJust $ responseOn auction then let Just opening = responseOn auction
+    in response opening
+  else return Pass
+
 isOpening :: Auction -> Bool
 isOpening = all ((== Pass) . snd) . calls
 
@@ -54,26 +74,13 @@ responseOn auction
     _ -> Nothing
   | otherwise = Nothing
 
-simpleConvention :: Convention
-simpleConvention = do
-  auction <- ask
-  hand <- lift $ ask
-  -- opening
-  if isOpening auction then opening
-  -- overcall
-  else if isJust $ overcallAfter auction then let Just opening = overcallAfter auction
-    in overcall opening
-  -- response
-  else if isJust $ responseOn auction then let Just opening = responseOn auction
-    in response opening
-  else return Pass
 
 lastNoPass :: Auction -> Maybe Call
 lastNoPass (Auction [] _) = Nothing
 lastNoPass auction@(Auction  ((_, call):_) _) = 
   if call == Pass then lastNoPass $ stepBack auction else Just call
 
-opening :: Convention
+opening :: BiddingConvention
 opening = do
   hand <- lift $ ask
   let hcp = highCardPoints hand
@@ -118,7 +125,7 @@ opening = do
   else return Pass
 
 -- simplified SAYC
-overcall :: Call -> Convention
+overcall :: Call -> BiddingConvention
 overcall opening = do
   hand <- lift ask
   let hcp = highCardPoints hand
@@ -133,7 +140,7 @@ overcall opening = do
   else return Pass
 
 -- really simplified SAYC - assumes bots sign-off the auction
-response :: Call -> Convention
+response :: Call -> BiddingConvention
 response (Bid Calls.One NoTrump) = do
   hand <- lift $ ask
   let hcp = highCardPoints hand
