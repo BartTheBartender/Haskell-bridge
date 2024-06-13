@@ -6,11 +6,10 @@ module Game (
   turn,
   nofDeclaredTricks,
   availableCards,
+  OpeningConvention,
   PlayingConvention,
   openGame,
-  playGame,
-
-  badOpeningConvention
+  playGame
   ) where
 
 import Player
@@ -145,13 +144,7 @@ advance card game =
   board' = board game
   trick = currentTrick game
 
-type Dummy = Hand
 type OpeningConvention = ReaderT Contract (Reader Hand) Card
-
-badOpeningConvention :: OpeningConvention
-badOpeningConvention = do
-  hand <- lift ask
-  return $ last $ availableCards [] hand
 
 openGame :: OpeningConvention -> Contract -> Board -> IO Game
 openGame convention contract board = do
@@ -165,23 +158,25 @@ openGame convention contract board = do
       let card = runReader (runReaderT convention contract) hand
       return $ Game contract lead (playCard board lead card) [card] 0
 
-type PlayingConvention = ReaderT Contract (Reader Hand) Card
+type PlayingConvention = ReaderT ([Trick], Hand) (ReaderT Contract (Reader Hand)) Card
 
 
-playGame :: ReaderT PlayingConvention (StateT Game IO) Int
-playGame = do
+playGame :: PlayingConvention -> StateT [Trick] (StateT Game IO) Int
+playGame playingConvention = do
   game <- lift get
   case trickWinner game of
 
-    Just winner -> 
+    Just winner -> do
+      modify ((currentTrick game):)
+      lift $ put game {currentTrick = []}
       if isEmpty (board game)
         then return (score game)
         else do
           let nofTricks' = if isPartner (lead game) winner 
                             then nofTricks game + 1 
                             else nofTricks game
-          put $ game { lead = winner, nofTricks = nofTricks' }
-          playGame
+          lift $ put $ game { lead = winner, nofTricks = nofTricks' }
+          playGame playingConvention
 
     Nothing -> do
       let turn' = turn game
@@ -196,12 +191,18 @@ playGame = do
                   else cardM
           card <- liftIO $ evalStateT cardM 0
           lift $ modify $ advance card
-          playGame
+          playGame playingConvention
         else do
-          convention <- ask
-          let card = runReader (runReaderT convention (contract game)) hand
+          tricks :: [Trick] <- get
+          let dummyHand = getHand (board game) (dummy game)
+          let 
+            card = runReader(
+              runReaderT (
+                runReaderT playingConvention (tricks, dummyHand)
+                ) (contract game)
+              ) hand
           lift $ modify $ advance card
-          playGame
+          playGame playingConvention
 
 getCardFromPlayer :: Hand -> StateT Int IO Card
 getCardFromPlayer hand@(Hand cards) = do

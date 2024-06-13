@@ -1,41 +1,19 @@
 module Conventions (
-  biddingConvention
+  biddingConvention,
+  openingConvention,
+  playingConvention
   ) where
 import Auction
 import Cards
 import Calls
-import Player
+import Player 
+import Game
 
 import Control.Monad.Reader
 import Data.Maybe
+import Data.Foldable (find)
+
 import Debug.Trace
-
--- general utility functions
-
-highCardPoints :: Hand -> Int
-highCardPoints (Hand cards) = foldl (\acc card -> case figure card of
-    Ace   -> acc + 4
-    King  -> acc + 3
-    Queen -> acc + 2
-    Jack  -> acc + 1
-    _ -> acc) 0 cards
-
-nofCards :: Hand -> Suit -> Int
-nofCards (Hand cards) suit' = length $ filter (\card -> suit card == suit') cards
-
-longestSuit hand = longest $ map (\suit -> (suit, nofCards hand suit)) [minBound .. maxBound] where
-  longest (x:[]) = x
-  longest (x:y:xs) = if snd x == snd y 
-    then if fst x > fst y then longest (x:xs) else longest (y:xs)
-    else if snd x > snd y then longest (x:xs)
-    else longest (y:xs)
-
--- A hand is balanced if it has no void and no singleton, doubletons at most two
-isBalanced :: Hand -> Bool
-isBalanced hand = all (>2) distribution && length (filter (==2) distribution) <= 2
-  where distribution = map (nofCards hand) [minBound..maxBound]
-
--- the default bidding convention
 
 biddingConvention :: BiddingConvention
 biddingConvention = do
@@ -50,6 +28,48 @@ biddingConvention = do
   else if isJust $ responseOn auction then let Just opening = responseOn auction
     in response opening
   else return Pass
+
+openingConvention :: OpeningConvention
+openingConvention = do
+  contract :: Contract <- ask
+  case strain contract of
+    Trump suit -> openingTrump suit
+    NoTrump -> openingNoTrump
+
+playingConvention :: PlayingConvention
+playingConvention = undefined
+
+-- general utility functions
+
+highCardPoints :: Hand -> Int
+highCardPoints (Hand cards) = foldl (\acc card -> case figure card of
+    Ace   -> acc + 4
+    King  -> acc + 3
+    Queen -> acc + 2
+    Jack  -> acc + 1
+    _ -> acc) 0 cards
+
+nofCards :: Hand -> Suit -> Int
+nofCards cards suit' = length $ getSuit cards suit'
+
+suitLengths :: Hand -> [(Suit,Int)]
+suitLengths hand = 
+  map (\suit' -> (suit', nofCards hand suit')) [minBound..maxBound]
+
+longestSuit :: Hand -> (Suit, Int)
+longestSuit hand = longest $ suitLengths hand where
+  longest (x:[]) = x
+  longest (x:y:xs) = if snd x == snd y 
+    then if fst x > fst y then longest (x:xs) else longest (y:xs)
+    else if snd x > snd y then longest (x:xs)
+    else longest (y:xs)
+
+-- A hand is balanced if it has no void and no singleton, doubletons at most two
+isBalanced :: Hand -> Bool
+isBalanced hand = all (>2) distribution && length (filter (==2) distribution) <= 2
+  where distribution = map (nofCards hand) [minBound..maxBound]
+--------------------------------------------------------------------------------
+-- utility functions for biddingConvention
 
 isOpening :: Auction -> Bool
 isOpening = all ((== Pass) . snd) . calls
@@ -200,3 +220,24 @@ response (Bid Calls.Two (Trump suit)) = do
     else return $ Bid Calls.Three NoTrump
 
 response _ = return Pass
+
+--------------------------------------------------------------------------------
+-- utility functions for openingConvention
+
+--
+openingNoTrump :: OpeningConvention
+openingNoTrump = do
+  hand :: Hand <- lift ask
+  let suit'= fst $ longestSuit hand
+  return $ (reverse $ getSuit hand suit') !! 4
+  -- safety: length hand = 13 = s + h + d + c. By pigeonhole one of them is >= 4
+
+openingTrump :: Suit -> OpeningConvention
+openingTrump trump = do
+  hand <- lift ask
+  let singletonSuit = fmap fst $ find (\(_, length') -> length' == 1) $ suitLengths hand
+  case singletonSuit of
+    Just suit' | suit' /= trump -> 
+      let [card] = getSuit hand suit' in return card
+    _ -> openingNoTrump
+

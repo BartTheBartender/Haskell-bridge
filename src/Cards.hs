@@ -4,6 +4,7 @@ module Cards(
   Figure(..),
   Card(..),
   Hand(..),
+  getSuit,
   Board,
   getHand,
   mkBoard,
