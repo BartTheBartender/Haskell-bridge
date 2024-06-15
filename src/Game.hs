@@ -7,7 +7,8 @@ module Game (
   nofDeclaredTricks,
   availableCards,
   OpeningConvention,
-  PlayingConvention,
+  DealingConvention,
+  DefendingConvention,
   openGame,
   playGame
   ) where
@@ -158,16 +159,25 @@ openGame convention contract board = do
       let card = runReader (runReaderT convention contract) hand
       return $ Game contract lead (playCard board lead card) [card] 0
 
-type PlayingConvention = ReaderT ([Trick], Hand) 
-  (ReaderT (Contract, Direction) (Reader Hand)) Card
+type DealingConvention = 
+  ReaderT Hand 
+  (ReaderT ([Trick], Hand) 
+  (Reader (Contract, Direction))) Card
+
+type DefendingConvention = 
+  ReaderT Hand 
+  (ReaderT ([Trick], Hand) 
+  (Reader (Contract, Direction))) Card
 
 
-playGame :: PlayingConvention -> StateT [Trick] (StateT Game IO) Int
-playGame playingConvention = do
+playGame :: DealingConvention -> DefendingConvention ->
+  StateT [Trick] (StateT Game IO) Int
+playGame dealingConvention defendingConvention = do
   game <- lift get
   case trickWinner game of
 
     Just winner -> do
+      -- calculate the result of the finished trick
       modify ((currentTrick game):)
       lift $ put game {currentTrick = []}
       if isEmpty (board game)
@@ -177,61 +187,49 @@ playGame playingConvention = do
                             then nofTricks game + 1 
                             else nofTricks game
           lift $ put $ game { lead = winner, nofTricks = nofTricks' }
-          playGame playingConvention
+          playGame dealingConvention defendingConvention
 
-    Nothing -> do
-      -- the REAL direction playing.
-      -- the turn' is swapped if it was a turn of the dummy, 
-      -- unless it the dummy is South
-      let 
-        turn'
-          | dummy game == South = South
-          | dummy game == turn game = partner $ turn game
-          | otherwise = turn game
-      -- moreover the hand is swapped to a partner if turn' == dummy game
-      let
-        board' = board game
-        hand :: Hand
-          | dummy game == South = getHand board' North
-          | dummy game == turn game = getHand board' $ partner $ turn game
-          | otherwise = getHand board' $ turn game
+    Nothing -> if isPartner South $ (dealer.contract) game
+      then do -- player move
+        let 
+          hand = getHand (board game) (turn game)
+          cardM :: (StateT Int IO) Card = do
+            card <- getCardFromPlayer hand
+            if elem card $ availableCards (currentTrick game) hand
+              then return card else cardM
 
+        card <- liftIO $ evalStateT cardM 0
+        lift $ modify $ advance card
+        playGame dealingConvention defendingConvention
 
-      let debugTurn = trace ("turn': " ++ show turn') ()
-      let debugHand = trace ("hand: " ++ show hand) ()
+        
+      else do -- ai move
+        tricks :: [Trick] <- get
+        let
+          turn' = turn game
+          dealer' = (dealer.contract) game
+          dummy' = dummy game
+          board' = board game
 
-            --     let 
-            -- card = runReader(
-            --   runReaderT (
-            --     runReaderT playingConvention (tricks, dummyHand)
-            --     ) (contract game)
-            --   ) hand
-            --
-            --
-      case turn' of
-        South -> do
-          let 
-            cardM :: (StateT Int IO) Card = do
-              card <- getCardFromPlayer hand
-              if elem card $ availableCards (currentTrick game) hand
-                then return card else cardM
-          card <- liftIO $ evalStateT cardM 0
+          cardReader = 
+            if turn' == dealer' then
+              runReaderT
+                (runReaderT dealingConvention (getHand board' dealer'))
+                (tricks, (getHand board' dummy'))
+            else if turn' == dummy' then -- by symmetry dummy sees dealers cards
+              runReaderT
+                (runReaderT dealingConvention (getHand board' dummy'))
+                (tricks, (getHand board' dealer'))
+            else
+              runReaderT
+                (runReaderT dealingConvention (getHand board' turn'))
+                (tricks, (getHand board' dummy'))
 
-          lift $ modify $ advance card
-          playGame playingConvention
-        _ -> do
-          let dummyHand :: Hand = getHand board' $ dummy game
-          tricks :: [Trick] <- get
+          
 
-          let 
-            card = runReader(
-              runReaderT (
-                runReaderT playingConvention (tricks, dummyHand)
-                ) (contract game, turn')
-              ) hand
-
-          lift $ modify $ advance card
-          playGame playingConvention
+        lift $ modify $ advance $ runReader cardReader (contract game, turn')
+        playGame dealingConvention defendingConvention
+                
 
 getCardFromPlayer :: Hand -> StateT Int IO Card
 getCardFromPlayer hand@(Hand cards) = do

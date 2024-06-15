@@ -252,5 +252,21 @@ openingTrump trump = do
     _ -> openingNoTrump
 
 -- playingConventions utilities
--- drawTrumps :: PlayingConvention
--- drawTrumps o
+
+nofHand :: Trick -> Int
+nofHand trick | length trick <= 3 = length trick + 1
+
+leadTrump :: Suit -> PlayingConvention
+leadTrump trump = do
+  (tricks, dummyHand) :: ([Trick], Hand) <- ask
+  hand :: Hand <- lift $ lift ask
+  -- first, draw trumps
+  let 
+    trumps :: [Card] =
+      filter (\card -> suit card == trump) $ concat tricks
+      ++ getSuit hand trump
+      ++ getSuit dummyHand trump
+  if 13 - length trumps == 0
+    then undefined
+    else undefined
+

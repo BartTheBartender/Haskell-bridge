@@ -3,7 +3,7 @@ import Calls
 import Auction hiding (turn)
 import Game
 import Player
-import Conventions
+-- import Conventions
 
 
 import Control.Monad.Reader
@@ -30,18 +30,18 @@ board' = unsafePerformIO $ do
 
 
 -- the true one
-main :: IO ()
-main = do
-
-    board :: Board <- mkBoard
-    start :: Direction <- randomDirection
-
-    let auction :: Auction = mkAuction start
-
-    contract :: Contract <- evalStateT (runAuction biddingConvention board) auction
-    if contract == FourPasses
-      then do
-        print "XD"
-      else do
-        game :: Game <- openGame openingConvention contract board
-        print game
+-- main :: IO ()
+-- main = do
+--
+--     board :: Board <- mkBoard
+--     start :: Direction <- randomDirection
+--
+--     let auction :: Auction = mkAuction start
+--
+--     contract :: Contract <- evalStateT (runAuction biddingConvention board) auction
+--     if contract == FourPasses
+--       then do
+--         print "XD"
+--       else do
+--         game :: Game <- openGame openingConvention contract board
+--         print game
