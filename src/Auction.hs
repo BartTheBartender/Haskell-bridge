@@ -99,7 +99,9 @@ runAuction :: BiddingConvention -> Board -> StateT Auction IO Contract
 runAuction convention board = do
   auction <- get
   case result auction of
-    Just contract -> return contract
+    Just contract -> do
+      lift $ system "clear"
+      return contract
     Nothing -> do
       
       case turn auction of

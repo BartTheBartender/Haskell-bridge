@@ -14,6 +14,7 @@ import Data.Maybe
 import Data.Foldable (find)
 
 import Debug.Trace
+import System.IO.Unsafe (unsafePerformIO)
 
 biddingConvention :: BiddingConvention
 biddingConvention = do
@@ -37,7 +38,15 @@ openingConvention = do
     NoTrump -> openingNoTrump
 
 playingConvention :: PlayingConvention
-playingConvention = undefined
+playingConvention = do
+  (contract, turn) <- lift ask
+  if turn == dealer contract 
+    then case strain contract of
+      NoTrump -> undefined
+      Trump suit -> undefined
+    else case strain contract of
+      NoTrump -> undefined
+      Trump suit -> undefined
 
 -- general utility functions
 
@@ -57,12 +66,12 @@ suitLengths hand =
   map (\suit' -> (suit', nofCards hand suit')) [minBound..maxBound]
 
 longestSuit :: Hand -> (Suit, Int)
-longestSuit hand = longest $ suitLengths hand where
-  longest (x:[]) = x
-  longest (x:y:xs) = if snd x == snd y 
-    then if fst x > fst y then longest (x:xs) else longest (y:xs)
-    else if snd x > snd y then longest (x:xs)
-    else longest (y:xs)
+longestSuit hand = foldl1(\x y -> longer x y) $ suitLengths hand where
+  longer x y = if snd x == snd y
+    then 
+      if fst x > fst y then x else y
+    else 
+      if snd x > snd y then x else y
 
 -- A hand is balanced if it has no void and no singleton, doubletons at most two
 isBalanced :: Hand -> Bool
@@ -224,11 +233,12 @@ response _ = return Pass
 --------------------------------------------------------------------------------
 -- utility functions for openingConvention
 
---
+
 openingNoTrump :: OpeningConvention
 openingNoTrump = do
   hand :: Hand <- lift ask
   let suit'= fst $ longestSuit hand
+  let _ = unsafePerformIO $ print hand
   return $ (reverse $ getSuit hand suit') !! 4
   -- safety: length hand = 13 = s + h + d + c. By pigeonhole one of them is >= 4
 
@@ -241,3 +251,6 @@ openingTrump trump = do
       let [card] = getSuit hand suit' in return card
     _ -> openingNoTrump
 
+-- playingConventions utilities
+-- drawTrumps :: PlayingConvention
+-- drawTrumps o
