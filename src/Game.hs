@@ -7,8 +7,7 @@ module Game (
   nofDeclaredTricks,
   availableCards,
   OpeningConvention,
-  DealingConvention,
-  DefendingConvention,
+  PlayingConvention,
   openGame,
   playGame
   ) where
@@ -19,8 +18,9 @@ import Calls
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate, intersperse)
+import Data.List (intercalate, intersperse, find)
 import Debug.Trace
+
 
 data Contract = Contract 
   {level :: Level, strain :: Strain, penalty :: Maybe Penalty, dealer :: Direction} | FourPasses deriving (Show, Eq)
@@ -35,7 +35,9 @@ data Game = Game {
   nofTricks :: Int}
 
 instance Show Game where
-  show game = 
+  show game =
+    "DEBUG: " ++ show contract' ++ "\n" ++ 
+    "DEBUG: " ++ (show (currentTrick game)) ++ "\n" ++
     show (dealer contract') ++ ": " ++
     show (level contract') ++ show (strain contract') ++ pen ++ 
     ", tricks: " ++ show (nofTricks game) ++ 
@@ -51,17 +53,17 @@ instance Show Game where
       _ -> ""
 
     stringifiedHands =
-      map (\(dir, cards) -> if dir == South || dir == dummy game
+      map (\(dir, cards) -> if dir == South || dir == (dummy.contract) game
         then map show cards
         else map (const "\ESC[32;5;16m\x1F0A0\ESC[0m") cards) $
       map (\(dir, Hand hand) -> (dir,hand)) $
       map (\dir -> (dir, getHand (board game) dir)) [minBound..maxBound]
-    
+
     align :: String -> String
     align "" = "   "
     align card |length card <= 17
       = card ++ (replicate (17 - length card) ' ')
-    
+
     north = align "" ++
       (concat $ map align (
         (stringifiedHands !! 1) ++ (replicate 
@@ -104,8 +106,8 @@ instance Show Game where
       shift 0 xs = xs
       shift n (x:xs) = shift (n-1) (xs ++ [x])
 
-dummy :: Game -> Direction
-dummy game = next.next.dealer $ contract game
+dummy :: Contract -> Direction
+dummy = next.next.dealer
 
 turn :: Game -> Direction
 turn game = last $ take ((length $ currentTrick $ game) + 1) $ iterate next (lead game)
@@ -118,16 +120,31 @@ nofDeclaredTricks game =
 score :: Game -> Int
 score game = 111111111111111
 
+updateLastTrick :: Trick -> [Trick] -> [Trick]
+updateLastTrick x [] = [x]
+updateLastTrick x (y:ys) = (x:ys)
+
 trickWinner :: Game -> Maybe Direction
 trickWinner game
   | length trick > 4 = error "the Play structure had > 4 cards in a trick!"
   | length trick == 4 = case strain $ contract $ game of
-    NoTrump -> undefined
-    Trump suit -> undefined
+    NoTrump -> 
+      Just $ foldl (\direction card -> 
+        if suit card == suit leadCard && card > leadCard
+          then next direction
+          else direction) (lead game) (reverse trick)
+    Trump trump -> case find (\card -> suit card == trump) (reverse trick) of
+      Just card -> Just $ foldl (\direction card' ->
+        if card == card then direction else next direction) (lead game) (reverse trick)
+      Nothing -> Just $ foldl (\direction card -> 
+                  if suit card == suit leadCard && card > leadCard
+                    then next direction
+                    else direction) (lead game) (reverse trick)
+
   | otherwise = Nothing
   where
   trick = currentTrick game
-  lead' = lead game
+  leadCard = last trick
 
 availableCards :: Trick -> Hand -> [Card]
 availableCards trick (Hand hand) = if null filtered then hand else filtered where
@@ -159,37 +176,41 @@ openGame convention contract board = do
       let card = runReader (runReaderT convention contract) hand
       return $ Game contract lead (playCard board lead card) [card] 0
 
-type DealingConvention = 
-  ReaderT Hand 
-  (ReaderT ([Trick], Hand) 
-  (Reader Contract)) Card
+---------------------------------------------------------------------------------
+type PlayingConvention = 
+  ReaderT Hand (
+    ReaderT Direction (
+      ReaderT Hand (
+        ReaderT Trick (
+          Reader Contract
+        )
+      )
+    )
+  ) Card
 
-type DefendingConvention = 
-  ReaderT Hand 
-  (ReaderT ([Trick], Hand) 
-  (Reader Contract)) Card
-
-
-playGame :: DealingConvention -> DefendingConvention ->
-  StateT [Trick] (StateT Game IO) Int
-playGame dealingConvention defendingConvention = do
-  game <- lift get
+playGame :: PlayingConvention -> StateT Game IO Int
+playGame playingConvention = do
+  game <- get
+  lift $ print game
   case trickWinner game of
 
     Just winner -> do
       -- calculate the result of the finished trick
-      modify ((currentTrick game):)
-      lift $ put game {currentTrick = []}
-      if isEmpty (board game)
-        then return (score game)
-        else do
-          let nofTricks' = if isPartner (lead game) winner 
+      lift $ print $ "DEBUG: WINNER FOUND: " ++ show winner
+      let nofTricks' = if isPartner ((dealer.contract) game) winner 
                             then nofTricks game + 1 
                             else nofTricks game
-          lift $ put $ game { lead = winner, nofTricks = nofTricks' }
-          playGame dealingConvention defendingConvention
+      put $ game {
+        lead = winner,
+        nofTricks = nofTricks',
+        currentTrick = []
+        }
+      if isEmpty $ board game 
+        then return $ score game
+        else playGame playingConvention
 
-    Nothing -> if isPartner South $ (dealer.contract) game
+    Nothing -> if (turn game == South) || 
+                  (turn game == North && (isPartner South $ (dealer.contract) game))
       then do -- player move
         let 
           hand = getHand (board game) (turn game)
@@ -198,37 +219,38 @@ playGame dealingConvention defendingConvention = do
             if elem card $ availableCards (currentTrick game) hand
               then return card else cardM
 
-        card <- liftIO $ evalStateT cardM 0
-        lift $ modify $ advance card
-        playGame dealingConvention defendingConvention
+        card <- lift $ evalStateT cardM 0
+        modify $ advance card
+        playGame playingConvention
 
         
       else do -- ai move
-        tricks :: [Trick] <- get
         let
           turn' = turn game
           dealer' = (dealer.contract) game
-          dummy' = dummy game
+          dummy' = (dummy.contract) game
           board' = board game
 
           cardReader = 
-            if turn' == dealer' then
-              runReaderT
-                (runReaderT dealingConvention (getHand board' dealer'))
-                (tricks, (getHand board' dummy'))
-            else if turn' == dummy' then -- by symmetry dummy sees dealers cards
-              runReaderT
-                (runReaderT dealingConvention (getHand board' dummy'))
-                (tricks, (getHand board' dealer'))
+            if turn' == dummy' 
+            then 
+              runReaderT(
+                runReaderT(
+                  runReaderT playingConvention (getHand board' dummy')
+                ) dummy'
+              ) (getHand board' dealer')
             else
-              runReaderT
-                (runReaderT dealingConvention (getHand board' turn'))
-                (tricks, (getHand board' dummy'))
+              runReaderT(
+                runReaderT(
+                  runReaderT playingConvention (getHand board' turn')
+                ) dummy'
+              ) (getHand board' dummy')
 
-          
-
-        lift $ modify $ advance $ runReader cardReader (contract game)
-        playGame dealingConvention defendingConvention
+        modify $ advance $ 
+          runReader (
+            runReaderT cardReader (currentTrick game)
+            ) (contract game)
+        playGame playingConvention
                 
 
 getCardFromPlayer :: Hand -> StateT Int IO Card

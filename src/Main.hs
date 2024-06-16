@@ -44,12 +44,8 @@ main = do
     contract :: Contract <- evalStateT (runAuction biddingConvention board) auction
     if contract == FourPasses
       then do
-        print "XD"
+        print "Four Passes."
       else do
         game :: Game <- openGame openingConvention contract board
-        result <- evalStateT (
-          evalStateT (
-            playGame dealingConvention defendingConvention
-            ) []
-          ) game
+        result :: Int <- evalStateT (playGame playingConvention) game
         print result

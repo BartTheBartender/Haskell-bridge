@@ -1,8 +1,7 @@
 module Conventions (
   biddingConvention,
   openingConvention,
-  dealingConvention,
-  defendingConvention,
+  playingConvention,
   ) where
 import Auction
 import Cards
@@ -38,18 +37,23 @@ openingConvention = do
     Trump suit -> openingTrump suit
     NoTrump -> openingNoTrump
 
-dealingConvention :: DealingConvention
-dealingConvention = do
-  contract :: Contract <- lift $ lift ask
-  case strain contract of
-    Trump suit -> dealingTrump suit
-    NoTrump -> dealingNoTrump
+playingConvention :: PlayingConvention
+playingConvention = do
+  myHand <- ask
+  myDirection <- lift ask
+  currTrick <- lift $ lift $ lift ask
+  contract <- lift $ lift $ lift $ lift ask
+  let strain' = strain contract
+  case nofHand currTrick of
+    1 -> 
+      if dummy contract == next myDirection then leadViaDummy
+      else if dummy contract == prev myDirection then leadToDummy
+      else leadDealer
+    2 -> return $ garbage currTrick myHand
+    3 -> return $ strongestWinning strain' currTrick myHand
+    4 -> return $ weakestWinning strain' currTrick myHand
 
-
-defendingConvention :: DefendingConvention
-defendingConvention = undefined
-
-
+--------------------------------------------------------------------------------
 -- general utility functions
 
 highCardPoints :: Hand -> Int
@@ -75,10 +79,11 @@ longestSuit hand = foldl1(\x y -> longer x y) $ suitLengths hand where
     else 
       if snd x > snd y then x else y
 
+distribution hand = map (nofCards hand) [minBound..maxBound]
 -- A hand is balanced if it has no void and no singleton, doubletons at most two
 isBalanced :: Hand -> Bool
-isBalanced hand = all (>2) distribution && length (filter (==2) distribution) <= 2
-  where distribution = map (nofCards hand) [minBound..maxBound]
+isBalanced hand = all (>2) (distribution hand) && 
+  length (filter (==2) (distribution hand)) <= 2
 --------------------------------------------------------------------------------
 -- utility functions for biddingConvention
 
@@ -239,9 +244,8 @@ response _ = return Pass
 openingNoTrump :: OpeningConvention
 openingNoTrump = do
   hand :: Hand <- lift ask
-  let suit'= fst $ longestSuit hand
-  let _ = unsafePerformIO $ print hand
-  return $ (reverse $ getSuit hand suit') !! 4
+  let longest = (reverse $ getSuit hand (fst $ longestSuit hand))
+  return $ trace (show longest) (longest !! 3)
   -- safety: length hand = 13 = s + h + d + c. By pigeonhole one of them is >= 4
 
 openingTrump :: Suit -> OpeningConvention
@@ -253,92 +257,85 @@ openingTrump trump = do
       let [card] = getSuit hand suit' in return card
     _ -> openingNoTrump
 
+--------------------------------------------------------------------------------
 -- playing utilities
 
 nofHand :: Trick -> Int
 nofHand trick | length trick <= 3 = length trick + 1
+              | otherwise = error $ "The trick " ++ show trick ++ " is done!"
 
-availableTrumps :: Suit -> Trick -> Hand -> [Card]
-availableTrumps trump trick hand = 
-  filter (\card -> suit card == trump) (availableCards trick hand)
-
-lowestBest :: Strain -> Trick -> Hand -> Maybe Card
-lowestBest NoTrump trick hand = 
-  find (\myCard -> (all (\trickCard -> trickCard < myCard) trick)) 
+winningCards :: Strain -> Trick -> Hand -> [Card]
+winningCards NoTrump trick hand =
+  filter (\myCard -> (all (\trickCard -> trickCard < myCard) trick)) 
   (availableCards trick hand)
 
-lowestBest (Trump trump) trick hand = 
-  case lowestBest NoTrump trick hand of
-    Just card -> Just card
-    Nothing -> find (const True) (getSuit hand trump)
+winningCards (Trump trump) trick hand =
+  if null trumpsInTrick
+    then winningCards NoTrump trick hand
+    else 
+      filter(
+        \myCard -> suit myCard == trump &&
+          (all (\trickCard -> trickCard < myCard) trumpsInTrick)
+      ) (availableCards trick hand)
+  where
+    trumpsInTrick :: [Card] = filter (\trickCard -> suit trickCard == trump) trick
 
-dealingNoTrump :: DealingConvention
-dealingNoTrump = do
-  (tricks, otherHand) <- lift $ ask
+garbage :: Trick -> Hand -> Card -- safety: hand is nonempty (playGame)
+garbage trick hand = minimum $ availableCards trick hand
+
+-- if there is no such card, then play garbage
+strongestWinning :: Strain -> Trick -> Hand -> Card
+strongestWinning strain trick hand = 
+  if null winning then garbage trick hand else maximum winning
+  where winning = winningCards strain trick hand
+
+weakestWinning :: Strain -> Trick -> Hand -> Card
+weakestWinning strain trick hand = 
+  if null winning then garbage trick hand else maximum winning
+  where winning = winningCards strain trick hand
+
+leadToDummy :: PlayingConvention
+leadToDummy = do
+
   myHand <- ask
-  let currTrick:_ = tricks
-  let avCards = availableCards currTrick myHand
+  dummy <- lift $ lift ask
+  strain' <- lift $ lift $ lift $ lift $ asks $ strain
 
-  case nofHand currTrick of
-    1 ->
-      return $ head $ getSuit myHand (fst $ longestSuit myHand)
-    2 ->
-      return $ minimum $ avCards
-    3 ->
-      return $ maximum $ avCards
-    4 -> case lowestBest NoTrump currTrick myHand of
-          Just card -> return card
-          Nothing -> return $ head avCards
+  let smallestSuit = fst $ foldl1 (\(suit, len) (suit', len') -> if len > len' then (suit', len') else (suit, len)) $ suitLengths dummy
+  
+  if not $ null $ getSuit myHand smallestSuit
+    then return $ maximum $ getSuit myHand smallestSuit
+    else return $ maximum $ getSuit myHand (fst $ longestSuit myHand)
 
-dealingTrump :: Suit -> DealingConvention
-dealingTrump trump = do
+
+
+leadViaDummy :: PlayingConvention
+leadViaDummy = do
   myHand <- ask
-  (tricks, otherHand) <- lift $ ask
-  let currTrick:_ = tricks
-  let avCards = availableCards currTrick myHand
+  dummy <- lift $ lift ask
+  strain' <- lift $ lift $ lift $ lift $ asks $ strain
 
-  let nofOpponentsTrumps :: Int = (\x -> 13-x).length $
-        (getSuit myHand trump) ++ (getSuit otherHand trump) ++
-        filter (\card -> suit card == trump) (concat tricks)
+  let highestCard = strongestWinning strain' [] dummy
+  
+  if not $ null $ getSuit myHand (suit highestCard)
+    then return $ minimum $ getSuit myHand (suit highestCard)
+    else return $ maximum $ getSuit myHand (fst $ longestSuit myHand)
 
-  let avTrumps = availableTrumps trump currTrick myHand
-  let trumpsInTrick = reverse $ filter (\trickCard -> suit trickCard == trump) currTrick
-  if nofOpponentsTrumps /= 0
-    then case nofHand currTrick of -- draw trumps
-      1 -> if null avTrumps
-            then return $ head $ getSuit myHand (fst $ longestSuit myHand)
-            else return $ head avTrumps
-      2 -> if null avTrumps
-              then return $ head avCards
-              else return $ head avTrumps
-      3 -> if null avTrumps
-              then return $ last avCards
-              else return $ last avTrumps
-      4 -> case lowestBest (Trump trump) currTrick myHand of
-              Just card -> return card
-              Nothing -> 
-                case lowestBest NoTrump currTrick myHand of
-                  Just card -> return card
-                  Nothing -> return $ head avCards
+leadDealer :: PlayingConvention
+leadDealer = do
+  myHand <- ask
+  otherHand <- lift $ lift ask
+  strain' <- lift $ lift $ lift $ lift $ asks $ strain
 
-
-    else case nofHand currTrick of -- take advantage of trumps
-          1 -> return $ head $ getSuit myHand (fst $ longestSuit myHand)
-          2 -> return $ head avCards -- snd low
-          3 -> if null avTrumps -- third high
-                then
-                  return $ last avTrumps
-                else
-                  return $ last avCards
-
-          4 -> if null trumpsInTrick -- 4th has to think again
-                then case lowestBest (Trump trump) currTrick myHand of
-                  Just card -> return card
-                  Nothing -> if null avTrumps 
-                    then return $ head avCards
-                    else return $ head avTrumps
-
-                else
-                  if null avTrumps
-                    then return $ head avCards
-                    else return $ head avTrumps
+  case strain' of
+    Trump trump | not $ null $ getSuit myHand trump 
+      -> return $ head $ getSuit myHand trump
+    _ -> do
+      let highestCard = strongestWinning NoTrump [] otherHand
+      if (not $ null $ getSuit myHand (suit highestCard)) && 
+         (figure highestCard == Ace ||
+          figure highestCard == King ||
+          figure highestCard == Queen)
+        then return $ minimum $ getSuit myHand (suit highestCard)
+        else return $ maximum $ getSuit myHand (fst $ longestSuit myHand)
+    

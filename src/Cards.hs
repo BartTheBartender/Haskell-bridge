@@ -57,7 +57,7 @@ data Card = Card { figure :: Figure, suit :: Suit } deriving (Eq, Bounded)
 
 instance Ord Card where
   compare (Card figure suit) (Card figure' suit') = 
-    if suit == suit' then compare figure figure' else compare suit suit'
+    if figure == figure' then compare suit suit' else compare figure figure'
 
 instance Show Card where
   show (Card figure suit) 
