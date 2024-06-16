@@ -1,7 +1,7 @@
 module Game (
   Contract(..),
   Game(..),
-  Trick(..),
+  Trick,
   dummy,
   turn,
   nofDeclaredTricks,
@@ -18,8 +18,7 @@ import Calls
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate, intersperse, find)
-import Debug.Trace
+import Data.List(intercalate, intersperse, find)
 
 
 data Contract = Contract 
@@ -49,7 +48,6 @@ instance Show Game where
   show game = show contract' ++ 
     ", tricks: " ++ show (nofTricks game) ++ 
     "/" ++ show (nofDeclaredTricks game) ++
-
     "\n" ++ line ++ "\n" ++
     north ++ "\n" ++ vertical ++ "\n" ++ south
     ++ "\n" ++ line where

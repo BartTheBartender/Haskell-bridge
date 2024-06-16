@@ -6,7 +6,7 @@ import Game (Contract(..))
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (find, intercalate)
+import Data.List (intercalate)
 import Debug.Trace
 import Text.Read hiding (get, lift)
 import System.Process

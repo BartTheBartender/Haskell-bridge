@@ -19,7 +19,6 @@ import System.Random.Shuffle (shuffle')
 import Data.Array
 import Data.List
 
-import Debug.Trace
 
 data Suit = Club | Diamond | Heart | Spade deriving (Eq, Ord, Bounded, Enum)
 
@@ -39,19 +38,14 @@ data Figure = Two | Three | Four | Five | Six | Seven | Eight | Nine | Ten |
               Jack | Queen | King | Ace deriving (Eq, Ord, Bounded, Enum)
 
 instance Show Figure where
-  show Ace   = "A"
-  show King  = "K"
-  show Queen = "Q"
-  show Jack  = "J"
-  show Ten   = show 10
-  show Nine  = show 9
-  show Eight = show 8
-  show Seven = show 7
-  show Six   = show 6
-  show Five  = show 5
-  show Four  = show 4
-  show Three = show 3
-  show Two   = show 2
+  show figure = 
+    let n = 2 + fromEnum figure 
+    in case n of
+      14 -> "A"
+      13 -> "K"
+      12 -> "Q"
+      11 -> "J"
+      _ -> show n
 
 data Card = Card { figure :: Figure, suit :: Suit } deriving (Eq, Bounded)
 

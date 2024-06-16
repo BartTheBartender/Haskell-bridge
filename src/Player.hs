@@ -1,6 +1,6 @@
 module Player where
 import Data.Array
-import System.Random (newStdGen, randomRIO)
+import System.Random (randomRIO)
 
 
 data Direction = West | North | East | South deriving (Show, Eq, Enum, Ord, Bounded, Ix)
@@ -28,6 +28,5 @@ isOpponent = (not .) . isPartner
 
 randomDirection :: IO Direction
 randomDirection = do
-  gen <- newStdGen
   randomNumber <- randomRIO (0,3)
   return $ toEnum randomNumber
