@@ -162,12 +162,12 @@ openGame convention contract board = do
 type DealingConvention = 
   ReaderT Hand 
   (ReaderT ([Trick], Hand) 
-  (Reader (Contract, Direction))) Card
+  (Reader Contract)) Card
 
 type DefendingConvention = 
   ReaderT Hand 
   (ReaderT ([Trick], Hand) 
-  (Reader (Contract, Direction))) Card
+  (Reader Contract)) Card
 
 
 playGame :: DealingConvention -> DefendingConvention ->
@@ -227,7 +227,7 @@ playGame dealingConvention defendingConvention = do
 
           
 
-        lift $ modify $ advance $ runReader cardReader (contract game, turn')
+        lift $ modify $ advance $ runReader cardReader (contract game)
         playGame dealingConvention defendingConvention
                 
 

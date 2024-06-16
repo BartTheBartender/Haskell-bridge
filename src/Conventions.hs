@@ -1,7 +1,8 @@
 module Conventions (
   biddingConvention,
   openingConvention,
-  playingConvention
+  dealingConvention,
+  defendingConvention,
   ) where
 import Auction
 import Cards
@@ -37,16 +38,17 @@ openingConvention = do
     Trump suit -> openingTrump suit
     NoTrump -> openingNoTrump
 
-playingConvention :: PlayingConvention
-playingConvention = do
-  (contract, turn) <- lift ask
-  if turn == dealer contract 
-    then case strain contract of
-      NoTrump -> undefined
-      Trump suit -> undefined
-    else case strain contract of
-      NoTrump -> undefined
-      Trump suit -> undefined
+dealingConvention :: DealingConvention
+dealingConvention = do
+  contract :: Contract <- lift $ lift ask
+  case strain contract of
+    Trump suit -> dealingTrump suit
+    NoTrump -> dealingNoTrump
+
+
+defendingConvention :: DefendingConvention
+defendingConvention = undefined
+
 
 -- general utility functions
 
@@ -251,22 +253,92 @@ openingTrump trump = do
       let [card] = getSuit hand suit' in return card
     _ -> openingNoTrump
 
--- playingConventions utilities
+-- playing utilities
 
 nofHand :: Trick -> Int
 nofHand trick | length trick <= 3 = length trick + 1
 
-leadTrump :: Suit -> PlayingConvention
-leadTrump trump = do
-  (tricks, dummyHand) :: ([Trick], Hand) <- ask
-  hand :: Hand <- lift $ lift ask
-  -- first, draw trumps
-  let 
-    trumps :: [Card] =
-      filter (\card -> suit card == trump) $ concat tricks
-      ++ getSuit hand trump
-      ++ getSuit dummyHand trump
-  if 13 - length trumps == 0
-    then undefined
-    else undefined
+availableTrumps :: Suit -> Trick -> Hand -> [Card]
+availableTrumps trump trick hand = 
+  filter (\card -> suit card == trump) (availableCards trick hand)
 
+lowestBest :: Strain -> Trick -> Hand -> Maybe Card
+lowestBest NoTrump trick hand = 
+  find (\myCard -> (all (\trickCard -> trickCard < myCard) trick)) 
+  (availableCards trick hand)
+
+lowestBest (Trump trump) trick hand = 
+  case lowestBest NoTrump trick hand of
+    Just card -> Just card
+    Nothing -> find (const True) (getSuit hand trump)
+
+dealingNoTrump :: DealingConvention
+dealingNoTrump = do
+  (tricks, otherHand) <- lift $ ask
+  myHand <- ask
+  let currTrick:_ = tricks
+  let avCards = availableCards currTrick myHand
+
+  case nofHand currTrick of
+    1 ->
+      return $ head $ getSuit myHand (fst $ longestSuit myHand)
+    2 ->
+      return $ minimum $ avCards
+    3 ->
+      return $ maximum $ avCards
+    4 -> case lowestBest NoTrump currTrick myHand of
+          Just card -> return card
+          Nothing -> return $ head avCards
+
+dealingTrump :: Suit -> DealingConvention
+dealingTrump trump = do
+  myHand <- ask
+  (tricks, otherHand) <- lift $ ask
+  let currTrick:_ = tricks
+  let avCards = availableCards currTrick myHand
+
+  let nofOpponentsTrumps :: Int = (\x -> 13-x).length $
+        (getSuit myHand trump) ++ (getSuit otherHand trump) ++
+        filter (\card -> suit card == trump) (concat tricks)
+
+  let avTrumps = availableTrumps trump currTrick myHand
+  let trumpsInTrick = reverse $ filter (\trickCard -> suit trickCard == trump) currTrick
+  if nofOpponentsTrumps /= 0
+    then case nofHand currTrick of -- draw trumps
+      1 -> if null avTrumps
+            then return $ head $ getSuit myHand (fst $ longestSuit myHand)
+            else return $ head avTrumps
+      2 -> if null avTrumps
+              then return $ head avCards
+              else return $ head avTrumps
+      3 -> if null avTrumps
+              then return $ last avCards
+              else return $ last avTrumps
+      4 -> case lowestBest (Trump trump) currTrick myHand of
+              Just card -> return card
+              Nothing -> 
+                case lowestBest NoTrump currTrick myHand of
+                  Just card -> return card
+                  Nothing -> return $ head avCards
+
+
+    else case nofHand currTrick of -- take advantage of trumps
+          1 -> return $ head $ getSuit myHand (fst $ longestSuit myHand)
+          2 -> return $ head avCards -- snd low
+          3 -> if null avTrumps -- third high
+                then
+                  return $ last avTrumps
+                else
+                  return $ last avCards
+
+          4 -> if null trumpsInTrick -- 4th has to think again
+                then case lowestBest (Trump trump) currTrick myHand of
+                  Just card -> return card
+                  Nothing -> if null avTrumps 
+                    then return $ head avCards
+                    else return $ head avTrumps
+
+                else
+                  if null avTrumps
+                    then return $ head avCards
+                    else return $ head avTrumps
