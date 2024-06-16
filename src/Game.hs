@@ -23,7 +23,18 @@ import Debug.Trace
 
 
 data Contract = Contract 
-  {level :: Level, strain :: Strain, penalty :: Maybe Penalty, dealer :: Direction} | FourPasses deriving (Show, Eq)
+  {level :: Level, strain :: Strain, penalty :: Maybe Penalty, dealer :: Direction} | FourPasses deriving Eq
+
+instance Show Contract where
+  show FourPasses = "FourPasses"
+  show contract 
+    = show (dealer contract) ++ ": " ++ 
+      show (level contract) ++ 
+      show (strain contract) ++ pen
+    where 
+      pen = case penalty contract of
+        Just x -> show x
+        _ -> ""
 
 type Trick = [Card]
 
@@ -35,11 +46,7 @@ data Game = Game {
   nofTricks :: Int}
 
 instance Show Game where
-  show game =
-    "DEBUG: " ++ show contract' ++ "\n" ++ 
-    "DEBUG: " ++ (show (currentTrick game)) ++ "\n" ++
-    show (dealer contract') ++ ": " ++
-    show (level contract') ++ show (strain contract') ++ pen ++ 
+  show game = show contract' ++ 
     ", tricks: " ++ show (nofTricks game) ++ 
     "/" ++ show (nofDeclaredTricks game) ++
 
@@ -48,9 +55,6 @@ instance Show Game where
     ++ "\n" ++ line where
 
     contract' = contract game
-    pen = case penalty contract' of
-      Just x -> show x
-      _ -> ""
 
     stringifiedHands =
       map (\(dir, cards) -> if dir == South || dir == (dummy.contract) game
@@ -75,9 +79,7 @@ instance Show Game where
         (13 - length (stringifiedHands !! 3)) "")
       )) ++ align ""
 
-    verticalRaw = take (max 
-      (length $ stringifiedHands !! 0) 
-      (length $ stringifiedHands !! 2)) $
+    verticalRaw = take 13 $
       zip ((stringifiedHands !! 0) ++ replicate 13 "")
           ((stringifiedHands !! 2) ++ replicate 13 "")
 
@@ -118,7 +120,45 @@ nofDeclaredTricks game =
 
 --helper function. Assumes game is finished
 score :: Game -> Int
-score game = 111111111111111
+score game = 
+  if isPartner ((dealer.contract) game) South
+    then dealersPoints
+    else -dealersPoints
+
+  where
+  strain' = strain $ contract game
+  declaredTricks = 6 + fromEnum (level $ contract game)
+  pen = penalty $ contract game
+
+  nofOvertricks = (nofTricks game) - declaredTricks
+
+  dealersPoints :: Int = case compare nofOvertricks 0 of
+      EQ -> case pen of
+        Just _ -> base strain' declaredTricks + 50
+        Nothing -> base strain' declaredTricks
+      LT -> case pen of
+        Just Redouble -> 200 * nofOvertricks
+        Just Double -> 100 * nofOvertricks
+        Nothing -> 50 * nofOvertricks
+      GT -> case pen of
+        Just Redouble -> addSlam declaredTricks $ 
+          base strain' declaredTricks + 200 * nofOvertricks + 50
+        Just Double -> addSlam declaredTricks $ 
+          base strain' declaredTricks + 100 * nofOvertricks + 50
+        Nothing -> addSlam declaredTricks $
+          base strain' (nofTricks game)
+
+  base :: Strain -> Int -> Int
+  base NoTrump tricks = 40 + 30 * (tricks - 1)
+  base (Trump suit) tricks 
+    | isMajor suit = 30 * tricks
+    | isMinor suit = 20 * tricks
+
+  addSlam :: Int -> Int -> Int
+  addSlam 13 x = 1000 + x
+  addSlam 12 x = 500 + x
+  addSlam _ x = x
+  
 
 updateLastTrick :: Trick -> [Trick] -> [Trick]
 updateLastTrick x [] = [x]
@@ -128,23 +168,35 @@ trickWinner :: Game -> Maybe Direction
 trickWinner game
   | length trick > 4 = error "the Play structure had > 4 cards in a trick!"
   | length trick == 4 = case strain $ contract $ game of
-    NoTrump -> 
-      Just $ foldl (\direction card -> 
-        if suit card == suit leadCard && card > leadCard
-          then next direction
-          else direction) (lead game) (reverse trick)
-    Trump trump -> case find (\card -> suit card == trump) (reverse trick) of
-      Just card -> Just $ foldl (\direction card' ->
-        if card == card then direction else next direction) (lead game) (reverse trick)
-      Nothing -> Just $ foldl (\direction card -> 
-                  if suit card == suit leadCard && card > leadCard
-                    then next direction
-                    else direction) (lead game) (reverse trick)
-
+    Trump trump -> case idxWithHighestTrump trump of
+      Just n -> Just $ idxToDirection n
+      Nothing -> Just $ idxToDirection idxWithHighestCard
+    NoTrump -> Just $ idxToDirection idxWithHighestCard
   | otherwise = Nothing
   where
-  trick = currentTrick game
-  leadCard = last trick
+  trick = zip [3,2,1,0] $ currentTrick game
+  leadCardSuit = suit $ last $ currentTrick game
+
+  
+  idxWithHighestCard :: Int = 
+    let inLeadSuit = filter(\(_, card) -> suit card == leadCardSuit) trick
+    in fst $ highest inLeadSuit
+
+
+  idxWithHighestTrump :: Suit -> Maybe Int 
+  idxWithHighestTrump trump = 
+    let trumps = filter(\(_, card) -> suit card == trump) trick
+    in if null trumps then Nothing else Just $ fst $ highest trumps
+
+  highest :: [(Int, Card)] -> (Int, Card)
+  highest [(idx, card)] = (idx, card)
+  highest ((idx, card):rest) =
+    let (idx', card') = highest rest 
+    in if card' > card then (idx', card') else (idx, card)
+
+  idxToDirection :: Int -> Direction
+  idxToDirection n | n < 4 = (iterate next (lead game)) !! n
+
 
 availableCards :: Trick -> Hand -> [Card]
 availableCards trick (Hand hand) = if null filtered then hand else filtered where
@@ -191,12 +243,10 @@ type PlayingConvention =
 playGame :: PlayingConvention -> StateT Game IO Int
 playGame playingConvention = do
   game <- get
-  lift $ print game
   case trickWinner game of
 
     Just winner -> do
       -- calculate the result of the finished trick
-      lift $ print $ "DEBUG: WINNER FOUND: " ++ show winner
       let nofTricks' = if isPartner ((dealer.contract) game) winner 
                             then nofTricks game + 1 
                             else nofTricks game
@@ -212,6 +262,7 @@ playGame playingConvention = do
     Nothing -> if (turn game == South) || 
                   (turn game == North && (isPartner South $ (dealer.contract) game))
       then do -- player move
+        lift $ print game
         let 
           hand = getHand (board game) (turn game)
           cardM :: (StateT Int IO) Card = do

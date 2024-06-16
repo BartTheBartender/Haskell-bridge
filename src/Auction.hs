@@ -101,6 +101,7 @@ runAuction convention board = do
   case result auction of
     Just contract -> do
       lift $ system "clear"
+      lift $ print auction
       return contract
     Nothing -> do
       

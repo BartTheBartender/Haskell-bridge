@@ -100,8 +100,12 @@ mkBoard = do
   return $ Board $ array
     (minBound, maxBound) $
     map (\dir -> (dir, 
-      Hand $ sort $ map snd $ filter (\(i, _) -> i `mod` 4 == fromEnum dir) helper
+      Hand $ sortBy bySuit $ map snd $ filter (\(i, _) -> i `mod` 4 == fromEnum dir) helper
     )) [minBound..maxBound]
+    where
+      bySuit card card' = if suit card == suit card' 
+        then compare (figure card) (figure card')
+        else compare (suit card) (suit card')
 
 
 playCard :: Board -> Direction -> Card -> Board
