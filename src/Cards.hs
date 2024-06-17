@@ -13,9 +13,8 @@ module Cards(
   ) where
 
 import Player
+import Shuffle
 
-import System.Random (newStdGen)
-import System.Random.Shuffle (shuffle')
 import Data.Array
 import Data.List
 
@@ -89,8 +88,8 @@ deck = [Card figure suit | suit <- [minBound..maxBound], figure <- [minBound..ma
 
 mkBoard :: IO Board
 mkBoard = do
-  gen <- newStdGen
-  let helper = zip [0..] $ shuffle' deck 52 gen
+  shuffled :: [Card] <- shuffle deck
+  let helper = zip [0..] shuffled
   return $ Board $ array
     (minBound, maxBound) $
     map (\dir -> (dir, 

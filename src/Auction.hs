@@ -6,7 +6,7 @@ import Game (Contract(..))
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate)
+import Data.List (intercalate, find)
 import Debug.Trace
 import Text.Read hiding (get, lift)
 import System.Process
@@ -52,18 +52,41 @@ result (Auction calls _) = case calls of
   _ -> Nothing
 
 resultHelper [(_, Pass)] = FourPasses
-resultHelper ((_, Pass):_) = error "The auction was constructed incorrectily!"
-resultHelper calls = 
-  let (_, lastCall):_ = calls
-      penalty = case lastCall of Pen pen -> Just pen; _ -> Nothing
-      toLastBid = 
-        dropWhile (\(_, call) -> case call of (Bid _ _) -> False; _ -> True) calls
-      (lastDirection, (Bid level strain)):_ = toLastBid
-      direction = fst $ last $ 
-        filter(\(_, call) -> case call of Bid _ strain -> True; _ -> False)
-        (filter((isPartner lastDirection).fst) toLastBid)
+resultHelper ((_, Pass):_) = error "The auction was constructed incorrectly!"
+resultHelper calls = case calls of
+  (direction, Bid level strain):rest
+    -> Contract level strain Nothing (findFirst rest direction strain)
 
-  in Contract level strain penalty direction
+  (_, Pen Double):(direction, Bid level strain):rest
+    -> Contract level strain (Just Double) (findFirst rest direction strain)
+
+  (_, Pen Double):(_, Pass):(_, Pass):(direction, Bid level strain):rest
+    -> Contract level strain (Just Double) (findFirst rest direction strain)
+
+  (_, Pen Redouble):(_, Pen Double):(direction, Bid level strain):rest
+    -> Contract level strain (Just Redouble) (findFirst rest direction strain)
+
+  (_, Pen Redouble):(_, Pass):(_, Pass):(_, Pen Double):(direction, Bid level strain):rest
+    -> Contract level strain (Just Redouble) (findFirst rest direction strain)
+
+  (_, Pen Redouble):(_, Pen Double):(_, Pass):(_, Pass):(direction, Bid level strain):rest
+    -> Contract level strain (Just Redouble) (findFirst rest direction strain)
+
+  (_, Pen Redouble):(_, Pass):(_, Pass):(_, Pen Double):(_, Pass):(_, Pass):(direction, Bid level strain):rest
+    -> Contract level strain (Just Redouble) (findFirst rest direction strain)
+
+  _ -> error "The auction was constructed incorrectly!"
+  where
+    findFirst :: [(Direction, Call)] -> Direction -> Strain -> Direction
+    findFirst rest direction strain =
+      let 
+        pairCalls = filter (\(direction', _) -> isPartner direction direction) rest
+        onlyBidsInStrain = filter(\(_, call) -> case call of
+          Bid _ strain' | strain == strain' -> True
+          otherwise -> False) pairCalls
+      in if (not.null) onlyBidsInStrain
+        then fst $ last onlyBidsInStrain
+        else direction
 
 availableCalls :: Auction -> [Call]
 availableCalls (Auction calls turn) =
@@ -130,5 +153,10 @@ getCallFromPlayer auction = do
   stringCall <- getLine
   case readMaybe stringCall of
     Just call | elem call (availableCalls auction) -> return call
-    _ -> getCallFromPlayer auction
+              | otherwise -> do
+                    mapM_ putStr ["The call: ", (show call), " is not available.\n"]
+                    getCallFromPlayer auction
+    _ -> do
+      putStrLn "Usage: 'Pass' - Pass, 'x' - Double, 'xx' - Redouble, example bid: 1NT"
+      getCallFromPlayer auction
 

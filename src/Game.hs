@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Game (
   Contract(..),
   Game(..),
@@ -19,6 +20,7 @@ import Calls
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List(intercalate, intersperse, find)
+import System.Process
 
 
 data Contract = Contract 
@@ -45,12 +47,22 @@ data Game = Game {
   nofTricks :: Int}
 
 instance Show Game where
-  show game = show contract' ++ 
-    ", tricks: " ++ show (nofTricks game) ++ 
-    "/" ++ show (nofDeclaredTricks game) ++
-    "\n" ++ line ++ "\n" ++
-    north ++ "\n" ++ vertical ++ "\n" ++ south
-    ++ "\n" ++ line where
+  show game = 
+    show contract' 
+    ++ 
+    ", tricks: " ++ show (nofTricks game) 
+    ++ 
+    "/" ++ show (nofDeclaredTricks game) 
+    ++
+    "\n" ++ line ++ "\n" 
+    ++
+    north ++ "\n" 
+    ++
+    vertical ++ "\n" 
+    ++
+    south
+    ++ 
+    "\n" ++ line where
 
     contract' = contract game
 
@@ -125,7 +137,7 @@ score game =
 
   where
   strain' = strain $ contract game
-  declaredTricks = 6 + fromEnum (level $ contract game)
+  declaredTricks = nofDeclaredTricks game
   pen = penalty $ contract game
 
   nofOvertricks = (nofTricks game) - declaredTricks
@@ -244,6 +256,8 @@ playGame playingConvention = do
   case trickWinner game of
 
     Just winner -> do
+      lift $ system "clear"
+      lift $ print game
       -- calculate the result of the finished trick
       let nofTricks' = if isPartner ((dealer.contract) game) winner 
                             then nofTricks game + 1 
@@ -260,13 +274,17 @@ playGame playingConvention = do
     Nothing -> if (turn game == South) || 
                   (turn game == North && (isPartner South $ (dealer.contract) game))
       then do -- player move
+        lift $ system "clear"
         lift $ print game
         let 
           hand = getHand (board game) (turn game)
           cardM :: (StateT Int IO) Card = do
             card <- getCardFromPlayer hand
             if elem card $ availableCards (currentTrick game) hand
-              then return card else cardM
+              then return card 
+              else do
+                lift $ mapM_ putStr ["The card: ", (show card), " is not available.\n"]
+                cardM
 
         card <- lift $ evalStateT cardM 0
         modify $ advance card
@@ -305,13 +323,14 @@ playGame playingConvention = do
 getCardFromPlayer :: Hand -> StateT Int IO Card
 getCardFromPlayer hand@(Hand cards) = do
   index <- get
-  lift $ mapM (\(idx, card) -> if idx == index 
+  displayCards <- lift $ mapM_ (\(idx, card) -> if idx == index
     then do 
     putStr $ "\ESC[47m" ++card
     putStr "\ESC[49m"
     else do 
       putStr card) 
     (zip [0,1..] $ map (\card -> show card ++ " ") cards)
+  let _ = displayCards `seq` ()
   mode <- lift $ getLine
   case mode of
     "a" -> do
@@ -328,7 +347,10 @@ getCardFromPlayer hand@(Hand cards) = do
           getCardFromPlayer hand
         else do
           getCardFromPlayer hand
-    "x" -> return $ cards !! index
-    _ -> getCardFromPlayer hand
+    "x" -> do
+      return $ cards !! index
+    _ -> do
+      lift $ putStrLn "Usage: 'd' - move right, 'a' - move left, 'x' - choose highlighted card."
+      getCardFromPlayer hand
 
 
