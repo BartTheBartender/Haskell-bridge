@@ -13,7 +13,6 @@ import Control.Monad.Reader
 import Data.Maybe
 import Data.Foldable (find)
 
-import Debug.Trace
 import System.IO.Unsafe (unsafePerformIO)
 
 biddingConvention :: BiddingConvention
@@ -245,7 +244,7 @@ openingNoTrump :: OpeningConvention
 openingNoTrump = do
   hand :: Hand <- lift ask
   let longest = (reverse $ getSuit hand (fst $ longestSuit hand))
-  return $ trace (show longest) (longest !! 3)
+  return (longest !! 3)
   -- safety: length hand = 13 = s + h + d + c. By pigeonhole one of them is >= 4
 
 openingTrump :: Suit -> OpeningConvention

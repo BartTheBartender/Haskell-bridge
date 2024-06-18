@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 module Game (
   Contract(..),
   Game(..),
@@ -224,6 +223,7 @@ advance card game =
   board' = board game
   trick = currentTrick game
 
+---------------------------------------------------------------------------------
 type OpeningConvention = ReaderT Contract (Reader Hand) Card
 
 openGame :: OpeningConvention -> Contract -> Board -> IO Game
@@ -323,14 +323,10 @@ playGame playingConvention = do
 getCardFromPlayer :: Hand -> StateT Int IO Card
 getCardFromPlayer hand@(Hand cards) = do
   index <- get
-  displayCards <- lift $ mapM_ (\(idx, card) -> if idx == index
-    then do 
-    putStr $ "\ESC[47m" ++card
-    putStr "\ESC[49m"
-    else do 
-      putStr card) 
-    (zip [0,1..] $ map (\card -> show card ++ " ") cards)
-  let _ = displayCards `seq` ()
+  let displayCards = unwords $ map (\(idx, card) -> if idx == index
+        then "\ESC[47m" ++ card ++ "\ESC[49m" else card)
+        (zip [0,1..] $ map show cards)
+  lift $ putStrLn displayCards
   mode <- lift $ getLine
   case mode of
     "a" -> do
